@@ -1,9 +1,9 @@
-from Population import Population
-from Voter import Voter, UnitVoter
-from Ideology import Ideology
-from Party import Party
+from .Population import Population
+from .Voter import Voter, UnitVoter
+from .Ideology import Ideology
+from .Party import Party
 import numpy as np
-from PopulationGroup import Independents
+from .PopulationGroup import Independents
 
 
 class NDPopulation(Population):

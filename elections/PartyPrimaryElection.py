@@ -1,9 +1,9 @@
-from CombinedPopulation import Democrats, Republicans, CombinedPopulation
-from Election import *
-from Party import Party
-from PluralityElection import PluralityElection
-from PopulationGroup import PopulationGroup
-from ElectionConfig import ElectionConfig
+from .CombinedPopulation import Democrats, Republicans, CombinedPopulation
+from .Election import *
+from .Party import Party
+from .PluralityElection import PluralityElection
+from .PopulationGroup import PopulationGroup
+from .ElectionConfig import ElectionConfig
 
 
 class PartyPrimaryElection(Election):

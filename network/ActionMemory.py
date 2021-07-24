@@ -1,41 +1,12 @@
-from CandidateNetwork import CandidateNetwork
-from Candidate import Candidate
 import numpy as np
 import tensorflow as tf
 from typing import List
 import random
 from Tensor import Tensor
-from Timings import Timings
+from ..util.Timings import Timings
 
 
-class ActionMemory:
-    def __init__(self, max_size: int, state_width: int, action_width: int):
-        self.max_size = max_size
-        self.state_width = state_width
-        self.action_width = action_width
-        self.depth_memory = {}
-        self.size = 0
-
-    def depths(self) -> List[int]:
-        return list(self.depth_memory.keys())
-
-    def ready(self) -> bool:
-        return self.size > 1000
-
-    def add_sample(self, state: np.ndarray, action: np.ndarray, reward: np.ndarray):
-        self.size += 1
-        sample_depth = state.shape[1]
-        if sample_depth not in self.depth_memory:
-            self.depth_memory[sample_depth] = ActionMemoryDepth(sample_depth, self.max_size, self.state_width,
-                                                                self.action_width)
-
-        self.depth_memory[sample_depth].add_sample(state, action, reward)
-
-    def get_batch(self, depth: int, batch_size: int) -> (Tensor, Tensor, Tensor):
-        return self.depth_memory[depth].get_batch(batch_size)
-
-
-class ActionMemoryDepth:
+class ElectionMemory:
     def __init__(self, depth: int, max_size: int, state_width: int, action_width: int):
         self.max_size = max_size
         self.state: np.array = np.zeros(shape=(0, 1))

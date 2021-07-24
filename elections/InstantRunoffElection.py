@@ -1,7 +1,7 @@
-from Election import ElectionResult, Election, BallotIter, Ballot
+from .Election import ElectionResult, Election, BallotIter, Ballot
 from typing import List, Iterable, Union, Set
-from Candidate import Candidate
-from PluralityElection import PluralityElection, PluralityResult
+from .Candidate import Candidate
+from .PluralityElection import PluralityElection, PluralityResult
 
 
 class InstantRunoffResult(ElectionResult):

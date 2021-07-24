@@ -1,5 +1,5 @@
-from Party import *
-from Voter import *
+from .Party import *
+from .Voter import *
 import random
 import numpy as np
 

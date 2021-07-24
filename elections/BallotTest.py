@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 
-from Ballot import Ballot
-from DefaultConfigOptions import *
-from PartyPrimaryElection import PartyPrimaryElection
+from .Ballot import Ballot
+from .DefaultConfigOptions import *
+from .PartyPrimaryElection import PartyPrimaryElection
 
 
 def main():

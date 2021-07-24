@@ -1,5 +1,5 @@
-from Voter import Voter
-from Party import Party
+from .Voter import Voter
+from .Party import Party
 from typing import List
 
 

@@ -1,8 +1,8 @@
-from Election import *
-from ElectionResult import ElectionResult
-from Ballot import Ballot
+from .Election import *
+from .ElectionResult import ElectionResult
+from .Ballot import Ballot
 from typing import List, Union, Iterable, Set
-from Candidate import Candidate
+from .Candidate import Candidate
 
 
 class PluralityResult(ElectionResult):

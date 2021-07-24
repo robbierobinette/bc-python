@@ -2,9 +2,9 @@ from typing import List, Set, Tuple
 
 import numpy as np
 
-from Candidate import Candidate
-from Election import Election, BallotIter
-from ElectionResult import ElectionResult
+from .Candidate import Candidate
+from .Election import Election, BallotIter
+from .ElectionResult import ElectionResult
 
 
 class HeadToHeadResult(ElectionResult):

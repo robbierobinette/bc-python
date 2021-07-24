@@ -1,11 +1,11 @@
 from typing import Set, Callable
 
-from Ballot import Ballot
-from DefaultConfigOptions import *
-from Election import Election
-from ElectionResult import ElectionResult
-from HeadToHeadElection import HeadToHeadElection
-from InstantRunoffElection import InstantRunoffElection
+from .Ballot import Ballot
+from .DefaultConfigOptions import *
+from .Election import Election
+from .ElectionResult import ElectionResult
+from .HeadToHeadElection import HeadToHeadElection
+from .InstantRunoffElection import InstantRunoffElection
 
 class ElectionConstructor:
     def __init__(self, constructor: Callable[[List[Ballot], Set[Candidate]], Election], name: str):

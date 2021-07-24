@@ -1,5 +1,4 @@
-from ElectionConstructor import ElectionConstructor
-from ModelStats import ModelStats
+from .ElectionConstructor import ElectionConstructor
 import pickle
 from Candidate import Candidate
 from typing import List

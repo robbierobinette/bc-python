@@ -1,5 +1,5 @@
-from PopulationGroup import *
-from CombinedPopulation import *
+from .PopulationGroup import *
+from .CombinedPopulation import *
 
 
 unit_election_config = ElectionConfig(

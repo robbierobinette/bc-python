@@ -1,8 +1,8 @@
-from Voter import *
-from PopulationGroup import *
+from .Voter import *
+from .PopulationGroup import *
 from typing import List
 from random import uniform
-from Population import Population
+from .Population import Population
 
 
 class CombinedPopulation(Population):

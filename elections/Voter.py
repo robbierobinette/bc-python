@@ -1,7 +1,7 @@
-from Party import Party, Independents
-from Ideology import Ideology
-from Candidate import Candidate
-from ElectionConfig import ElectionConfig
+from .Party import Party, Independents
+from .Ideology import Ideology
+from .Candidate import Candidate
+from .ElectionConfig import ElectionConfig
 import random
 
 

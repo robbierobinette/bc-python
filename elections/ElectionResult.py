@@ -1,5 +1,5 @@
 from typing import List
-from Candidate import Candidate
+from .Candidate import Candidate
 
 
 class ElectionResult:

@@ -1,7 +1,7 @@
-from ElectionResult import ElectionResult
-from Ballot import Ballot
+from .ElectionResult import ElectionResult
+from .Ballot import Ballot
 from typing import List, Iterable, Union, Set
-from Candidate import Candidate
+from .Candidate import Candidate
 
 BallotIter = Union[Iterable[Ballot], List[Ballot]]
 

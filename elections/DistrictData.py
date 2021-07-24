@@ -1,7 +1,7 @@
 import csv
 from typing import List
-from CombinedPopulation import CombinedPopulation
-from PopulationGroup import PopulationGroup, Democrats, Republicans, Independents
+from .CombinedPopulation import CombinedPopulation
+from .PopulationGroup import PopulationGroup, Democrats, Republicans, Independents
 
 
 class DistrictVotingRecord:

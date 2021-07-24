@@ -1,8 +1,8 @@
 from typing import List, Set
-from CandidateScore import CandidateScore
-from Candidate import Candidate
-from Voter import Voter
-from ElectionConfig import ElectionConfig
+from .Candidate import Candidate
+from .CandidateScore import CandidateScore
+from .Voter import Voter
+from .ElectionConfig import ElectionConfig
 
 
 class Ballot:
