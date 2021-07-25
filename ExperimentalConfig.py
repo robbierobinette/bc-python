@@ -8,10 +8,12 @@ from elections.Ideology import Ideology
 from elections.NDPopulation import NDPopulation
 from elections.PopulationGroup import Independents
 from network.Tensor import Tensor
+from elections.ElectionConstructor import ElectionConstructor
 
 
 class ExperimentalConfig:
     def __init__(self,
+                 election_constructor: ElectionConstructor,
                  ideology_range: float,
                  ideology_flexibility: float,
                  n_bins: int,
@@ -23,6 +25,7 @@ class ExperimentalConfig:
                  sampling_voters: int,
                  path: str):
 
+        self.election_constructor = election_constructor
         self.ideology_dim = 1
         self.ideology_range = ideology_range
         self.ideology_flexibility = ideology_flexibility
@@ -67,7 +70,7 @@ class ExperimentalConfig:
         return candidates
 
     def convert_bin_to_ideology(self, bin: int) -> float:
-        step = self.ideology_range / self.n_bins
+        step = (self.ideology_range * 2) / self.n_bins
         lower = bin * step + self.min_ideology
         upper = lower + step
         return random.uniform(lower, upper)

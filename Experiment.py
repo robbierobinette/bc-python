@@ -10,7 +10,7 @@ from elections.Candidate import Candidate
 from elections.Ideology import Ideology
 from elections.NDPopulation import NDPopulation
 from elections.PopulationGroup import Independents
-from elections.ElectionConstructor import ElectionConstructor, construct_irv, construct_h2h
+from elections.ElectionConstructor import ElectionConstructor
 from network.Tensor import Tensor
 from network.ElectionModel import ElectionModel
 from ExperimentalConfig import ExperimentalConfig
@@ -33,7 +33,10 @@ class ExtendedCandidate:
 
     def win_bonus(self, ideology: float) -> float:
         delta = math.fabs(ideology - self.base_candidate.ideology.vec[0])
-        return max(1 - delta / self.config.ideology_flexibility, 0.0)
+        wb = max(1 - delta / self.config.ideology_flexibility, 0.0)
+        # print(f"win_bonus:  base_ideology {self.base_candidate.ideology.vec[0]:.4f}" +
+        #       f"ideology {ideology:.4f} delta {delta:.4f}")
+        return wb
 
     def best_position(self, model: ElectionModel, other_candidates: List[Candidate], bin_range: int) -> float:
         x = self.config.convert_candidates_to_input_vec(other_candidates)
@@ -41,18 +44,20 @@ class ExtendedCandidate:
         # print("win_probabilities")
         # print(win_probabilities)
 
+        # don't change anything of all options have zero return
+        best_return = 1e-6
+        best_ideology = self.current_candidate.ideology.vec[0]
 
-        best_return = -1
-        best_ideology = -1
         b_start = self.current_bin - bin_range
         b_end = min(self.config.n_bins, self.current_bin + bin_range + 1)
         for b in range(b_start, b_end):
             ideology = self.config.convert_bin_to_ideology(b)
             wb = self.win_bonus(ideology)
             expected_return = wb * win_probabilities[0, b]
-            # print(f"bin {b} ideology {ideology:.4f} win_bonus {wb:.4f} expected_return{expected_return:.4f}", end='')
+            # print(f"bin {b:2d} ideology {ideology: .4f} win_probability {win_probabilities[0, b]:.4f} " +
+            #       f"win_bonus {wb:.4f} expected_return {expected_return:.4f}", end='')
             if expected_return > best_return:
-                # print(" best!", end = '')
+                # print(" best!", end='')
                 best_return = expected_return
                 best_ideology = ideology
             # print('')
@@ -90,6 +95,7 @@ class Experiment:
 
     def get_or_train_model(self) -> ElectionModel:
         if path.exists(self.model_path):
+            # print(f"loading {self.model_path}")
             self._model = tf.keras.models.load_model(self.model_path)
         else:
             self._model = self.train_model()
@@ -105,12 +111,12 @@ class Experiment:
 
     def populate_memory(self, count: int) -> ElectionMemory:
         m = ElectionMemory(count * 5, self.config.n_bins)
-        process = ElectionConstructor(construct_irv, "IRV")
+        process = self.config.election_constructor
         print(f"populating training memory with {count * 5} samples")
         for i in range(count):
             cc = self.config.gen_random_candidates(5)
-            c, w = self.run_sample_election(cc, process, self.config.training_voters)
-            ci, wi = self.config.create_training_sample(c, w)
+            w = self.run_sample_election(cc, process, self.config.training_voters)
+            ci, wi = self.config.create_training_sample(cc, w)
             m.add_sample(ci, wi)
             if i % 100 == 0:
                 print(".", end='')
@@ -175,22 +181,22 @@ class Experiment:
             print(f"\tcandidate {c.name}, {c.ideology.vec[0]:.4f}")
 
     def run_strategic_races(self, n: int) -> np.ndarray:
-        process = ElectionConstructor(construct_irv, "IRV")
+        process = self.config.election_constructor
         model = self.model()
         population = self.config.population
 
         winners = []
         for i in range(n):
             candidates = self.config.gen_candidates(5)
+            # self.log_candidates(f"starting candidates", candidates)
             extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
-            # self.log_candidates("starting candidates", candidates)
-            for bb in [3, 2, 1]:
+            for bin_range in [3, 2, 1]:
                 cc = [ec.current_candidate for ec in extended_candidates]
-                candidates = [e.best_candidate(model, cc, bb) for e in extended_candidates]
-                # self.log_candidates(f"after adjust {bb}", candidates)
+                candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
+                # self.log_candidates(f"after adjust {bin_range}", candidates)
 
             w = self.run_sample_election(candidates, process, self.config.sampling_voters)
-            if i % 10 == 0:
+            if i % 100 == 0:
                 print(f"{i:5d} w.ideology: {w.ideology.vec[0]:.4}")
 
             winners.append(w.ideology.vec[0])
