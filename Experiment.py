@@ -106,7 +106,7 @@ class Experiment:
     def train_model(self) -> ElectionModel:
         network = ElectionModel(self.config.n_bins, self.config.model_width, self.config.model_layers)
         self.populate_memory(self.config.memory_size)
-        network, loss = self.train_network(network, self.memory, 10000, self.config.batch_size)
+        network, loss = self.train_network(network, self.memory, self.config.training_cycles, self.config.batch_size)
         return network
 
     def populate_memory(self, count: int) -> ElectionMemory:

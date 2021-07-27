@@ -8,12 +8,13 @@ from elections.Ideology import Ideology
 from elections.NDPopulation import NDPopulation
 from elections.PopulationGroup import Independents
 from network.Tensor import Tensor
-from elections.ElectionConstructor import ElectionConstructor
+from elections.ElectionConstructor import ElectionConstructor, construct_irv, construct_h2h
 
 
 class ExperimentalConfig:
     def __init__(self,
-                 election_constructor: ElectionConstructor,
+                 election_name: str,
+                 training_cycles: float,
                  ideology_range: float,
                  ideology_flexibility: float,
                  n_bins: int,
@@ -25,7 +26,12 @@ class ExperimentalConfig:
                  sampling_voters: int,
                  path: str):
 
-        self.election_constructor = election_constructor
+        if election_name == "IRV":
+            self.election_constructor = ElectionConstructor(construct_irv, "IRV")
+        else:
+            self.election_constructor = ElectionConstructor(construct_h2h, "H2H")
+        self.election_name = election_name
+        self.training_cycles = training_cycles
         self.ideology_dim = 1
         self.ideology_range = ideology_range
         self.ideology_flexibility = ideology_flexibility
@@ -40,6 +46,24 @@ class ExperimentalConfig:
         self.sampling_voters = sampling_voters
         self.population = self.create_population()
         self.path = path
+
+    def save(self):
+        with open(f"{self.path}.txt") as f:
+            f.write(self.toString())
+
+    def toString(self) -> str:
+        return f"election_name {self.election_name}\n" + \
+               f"training_cycles {self.training_cycles}\n" + \
+               f"ideology_range {self.ideology_range}\n" + \
+               f"ideology_flexibility {self.ideology_flexibility}\n" + \
+               f"n_bins {self.n_bins}\n" + \
+               f"model_width {self.model_width}\n" + \
+               f"model_layers {self.model_layers}\n" + \
+               f"memory_size {self.memory_size}\n" + \
+               f"batch_size {self.batch_size}\n" + \
+               f"training_voters {self.training_voters}\n" + \
+               f"sampling_voters {self.sampling_voters}\n" + \
+               f"path {self.path}\n"
 
     def convert_candidates_to_input_vec(self, candidates: List[Candidate]) -> Tensor:
         cc = [self.convert_ideology_to_bin(c.ideology.vec[0]) for c in candidates]
