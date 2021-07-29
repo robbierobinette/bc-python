@@ -1,6 +1,6 @@
 from elections.Ideology import Ideology
 import random
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 
@@ -156,24 +156,6 @@ class Experiment:
 
         return net, average_loss
 
-    def plot_results(self, results: List[List[float]], labels: List[str]):
-        n_rows = 1
-        n_cols = 1
-        fig, axis = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 10))
-        fig.suptitle("Ideology of Winner with Strategic Candidates", color="black", fontsize=22)
-        fig.set_facecolor("white")
-
-        count = 0
-
-        axis.tick_params(axis='x', colors="black")
-        axis.tick_params(axis='y', colors="black")
-        # axis.set_xlim([0, 2])
-
-        axis.hist(results, bins=30, label=labels)
-        axis.legend()
-
-        plt.savefig("foo.png")
-
     @staticmethod
     def log_candidates(msg: str, cc: List[Candidate]):
         print(msg)
@@ -181,6 +163,14 @@ class Experiment:
             print(f"\tcandidate {c.name}, {c.ideology.vec[0]:.4f}")
 
     def run_strategic_races(self, n: int) -> np.ndarray:
+        winners = self.run_strategic_races_core(n)
+        winner_ideology = []
+        for (w, cc) in winners:
+            winner_ideology.append(w.ideology.vec[0])
+
+        return np.array(winners)
+
+    def run_strategic_races_core(self, n: int) -> List[Tuple[Candidate, List[Candidate]]]:
         process = self.config.election_constructor
         model = self.model()
         population = self.config.population
@@ -199,6 +189,29 @@ class Experiment:
             if i % 100 == 0:
                 print(f"{i:5d} w.ideology: {w.ideology.vec[0]:.4}")
 
-            winners.append(w.ideology.vec[0])
+            winners.append((w, candidates))
 
-        return np.array(winners)
+        return winners
+
+    def plot_results(self, results: List[List[float]], title: str, labels: List[str]):
+        n_rows = 1
+        n_cols = 1
+        fig, axis = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 10))
+        fig.suptitle(title, color="black", fontsize=22)
+        fig.set_facecolor("white")
+
+        count = 0
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+
+        axis.tick_params(axis='x', colors="black")
+        axis.tick_params(axis='y', colors="black")
+        axis.set_xlim([-1, 1])
+
+        bins = np.arange(-1, 1, 2/21)
+        axis.hist(results, bins=bins, label=labels)
+        axis.legend()
+        axis.set_xlabel("Sigma From Origin", fontsize=20)
+        axis.set_ylabel("Frequency of Winner at Ideology", fontsize=20)
+
+        plt.savefig("foo.png")

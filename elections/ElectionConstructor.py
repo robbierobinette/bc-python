@@ -6,6 +6,7 @@ from .Election import Election
 from .ElectionResult import ElectionResult
 from .HeadToHeadElection import HeadToHeadElection
 from .InstantRunoffElection import InstantRunoffElection
+from .PluralityElection import PluralityElection
 
 class ElectionConstructor:
     def __init__(self, constructor: Callable[[List[Ballot], Set[Candidate]], Election], name: str):
@@ -23,4 +24,8 @@ def construct_irv(ballots: List[Ballot], candidates: Set[Candidate]):
 
 def construct_h2h(ballots: List[Ballot], candidates: Set[Candidate]):
     return HeadToHeadElection(ballots, candidates)
+
+
+def construct_plurality(ballots: List[Ballot], candidates: Set[Candidate]):
+    return PluralityElection(ballots, candidates)
 

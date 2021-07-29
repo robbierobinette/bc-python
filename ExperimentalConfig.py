@@ -8,7 +8,7 @@ from elections.Ideology import Ideology
 from elections.NDPopulation import NDPopulation
 from elections.PopulationGroup import Independents
 from network.Tensor import Tensor
-from elections.ElectionConstructor import ElectionConstructor, construct_irv, construct_h2h
+from elections.ElectionConstructor import ElectionConstructor, construct_irv, construct_h2h, construct_plurality
 
 
 class ExperimentalConfig:
@@ -28,8 +28,13 @@ class ExperimentalConfig:
 
         if election_name == "IRV":
             self.election_constructor = ElectionConstructor(construct_irv, "IRV")
-        else:
+        elif election_name == "H2H":
             self.election_constructor = ElectionConstructor(construct_h2h, "H2H")
+        elif election_name == "Plurality":
+            self.election_constructor = ElectionConstructor(construct_plurality, "Plurality")
+        else:
+            assert(False, f"Unrecognized election type {election_name}")
+
         self.election_name = election_name
         self.training_cycles = training_cycles
         self.ideology_dim = 1
@@ -48,7 +53,7 @@ class ExperimentalConfig:
         self.path = path
 
     def save(self):
-        with open(f"{self.path}.txt") as f:
+        with open(f"{self.path}.txt", "w") as f:
             f.write(self.toString())
 
     def toString(self) -> str:
@@ -80,7 +85,7 @@ class ExperimentalConfig:
     @staticmethod
     def gen_prototype_candidates() -> List[Candidate]:
         c1 = Candidate("L", Independents, Ideology(np.array([-1])), 0)
-        c2 = Candidate("M", Independents, Ideology(np.array([0])), 0)
+        c2 = Candidate("C", Independents, Ideology(np.array([0])), 0)
         c3 = Candidate("R", Independents, Ideology(np.array([1])), 0)
         return [c1, c2, c3]
 
