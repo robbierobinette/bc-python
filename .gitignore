@@ -1,1 +1,6 @@
 venv/
+exp/
+logs/
+*.png
+__pycache__/
+.DS_store

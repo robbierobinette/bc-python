@@ -177,7 +177,7 @@ class Experiment:
 
         winners = []
         for i in range(n):
-            candidates = self.config.gen_candidates(5)
+            candidates = self.config.gen_candidates_2(5)
             # self.log_candidates(f"starting candidates", candidates)
             extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
             for bin_range in [3, 2, 1]:
@@ -193,25 +193,26 @@ class Experiment:
 
         return winners
 
-    def plot_results(self, results: List[List[float]], title: str, labels: List[str]):
+    @staticmethod
+    def plot_results(results: List[List[float]], title: str, labels: List[str]):
         n_rows = 1
         n_cols = 1
-        fig, axis = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 10))
-        fig.suptitle(title, color="black", fontsize=22)
+        fig, axis = plt.subplots(nrows = n_rows, ncols = n_cols, figsize = (20, 10))
+        fig.suptitle(title, color = "black", fontsize = 22)
         fig.set_facecolor("white")
 
         count = 0
-        plt.xticks(fontsize=16)
-        plt.yticks(fontsize=16)
+        plt.xticks(fontsize = 16)
+        plt.yticks(fontsize = 16)
 
-        axis.tick_params(axis='x', colors="black")
-        axis.tick_params(axis='y', colors="black")
+        axis.tick_params(axis = 'x', colors = "black")
+        axis.tick_params(axis = 'y', colors = "black")
         axis.set_xlim([-1, 1])
 
-        bins = np.arange(-1, 1, 2/21)
-        axis.hist(results, bins=bins, label=labels)
+        bins = np.arange(-1, 1, 2 / 21)
+        axis.hist(results, bins = bins, label = labels, edgecolor = 'white', stacked = True)
         axis.legend()
-        axis.set_xlabel("Sigma From Origin", fontsize=20)
-        axis.set_ylabel("Frequency of Winner at Ideology", fontsize=20)
+        axis.set_xlabel("Sigma From Origin", fontsize = 20)
+        axis.set_ylabel("Frequency of Winner at Ideology", fontsize = 20)
 
         plt.savefig("foo.png")

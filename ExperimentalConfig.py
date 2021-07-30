@@ -14,17 +14,17 @@ from elections.ElectionConstructor import ElectionConstructor, construct_irv, co
 class ExperimentalConfig:
     def __init__(self,
                  election_name: str,
-                 training_cycles: float,
-                 ideology_range: float,
-                 ideology_flexibility: float,
-                 n_bins: int,
-                 model_width: int,
-                 model_layers: int,
-                 memory_size: int,
-                 batch_size: int,
-                 training_voters: int,
-                 sampling_voters: int,
-                 path: str):
+                 training_cycles: float = 1000,
+                 ideology_range: float = 1.5,
+                 ideology_flexibility: float = .7,
+                 n_bins: int = 21,
+                 model_width: int = 512,
+                 model_layers: int = 3,
+                 memory_size: int = 20000,
+                 batch_size: int = 2048,
+                 training_voters: int = 1000,
+                 sampling_voters: int = 1000,
+                 path: str = "none"):
 
         if election_name == "IRV":
             self.election_constructor = ElectionConstructor(construct_irv, "IRV")
@@ -77,6 +77,18 @@ class ExperimentalConfig:
             x[0, c] = 1
         return x
 
+    def gen_candidates_2(self, n: int):
+        cc = self.gen_random_candidates(n)
+        ideologies = [c.ideology.vec[0] for c in cc]
+        min_ideology = min(ideologies)
+        max_ideology = max(ideologies)
+
+        span = .25
+        if min_ideology > -span or max_ideology < span:
+            return self.gen_candidates_2(n)
+        else:
+            return cc
+
     def gen_candidates(self, n: int) -> List[Candidate]:
         p = self.gen_prototype_candidates()
         r = self.gen_random_candidates(n - len(p))
@@ -84,9 +96,9 @@ class ExperimentalConfig:
 
     @staticmethod
     def gen_prototype_candidates() -> List[Candidate]:
-        c1 = Candidate("L", Independents, Ideology(np.array([-1])), 0)
-        c2 = Candidate("C", Independents, Ideology(np.array([0])), 0)
-        c3 = Candidate("R", Independents, Ideology(np.array([1])), 0)
+        c1 = Candidate("L", Independents, Ideology(np.array([-1.0])), 0)
+        c2 = Candidate("C", Independents, Ideology(np.array([0.0])), 0)
+        c3 = Candidate("R", Independents, Ideology(np.array([1.0])), 0)
         return [c1, c2, c3]
 
     def gen_random_candidates(self, n: int) -> List[Candidate]:
