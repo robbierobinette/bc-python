@@ -17,6 +17,10 @@ class HeadToHeadResult(ElectionResult):
 
 
 class HeadToHeadElection(Election):
+
+    # count the number of times a tie, aka Condorcet paradox occurs
+    count_of_ties = 0
+
     def __init__(self, ballots: BallotIter, candidates: Set[Candidate]):
         super().__init__(ballots, candidates)
         self.candidate_list = list(self.candidates)
@@ -65,6 +69,12 @@ class HeadToHeadElection(Election):
         max_losses: List[Tuple[Candidate, float]] = [(ci, self.max_loss(ci, ac)) for ci in ac]
 
         max_losses.sort(key=lambda x: x[1])
+
+        # count all elections where, in the first round, there is a Condorcet-tie
+        if len(active_candidates) == len(self.candidates):
+            if max_losses[0][1] < 0:
+                HeadToHeadElection.count_of_ties += 1
+
         winner = max_losses[0][0]
         ac.remove(winner)
         return [winner] + self.minimax(ac)
