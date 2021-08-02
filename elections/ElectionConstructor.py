@@ -18,14 +18,14 @@ class ElectionConstructor:
         return e.result()
 
 
-def construct_irv(ballots: List[Ballot], candidates: Set[Candidate]):
+def construct_irv(ballots: List[Ballot], candidates: Set[Candidate]) -> Election:
     return InstantRunoffElection(ballots, candidates)
 
 
-def construct_h2h(ballots: List[Ballot], candidates: Set[Candidate]):
+def construct_h2h(ballots: List[Ballot], candidates: Set[Candidate]) -> Election:
     return HeadToHeadElection(ballots, candidates)
 
 
-def construct_plurality(ballots: List[Ballot], candidates: Set[Candidate]):
+def construct_plurality(ballots: List[Ballot], candidates: Set[Candidate]) -> Election:
     return PluralityElection(ballots, candidates)
 

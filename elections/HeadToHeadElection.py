@@ -72,7 +72,7 @@ class HeadToHeadElection(Election):
 
         # count all elections where, in the first round, there is a Condorcet-tie
         if len(active_candidates) == len(self.candidates):
-            if max_losses[0][1] < 0:
+            if max_losses[0][1] > 0:
                 HeadToHeadElection.count_of_ties += 1
 
         winner = max_losses[0][0]

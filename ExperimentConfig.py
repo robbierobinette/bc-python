@@ -11,7 +11,7 @@ from network.Tensor import Tensor
 from elections.ElectionConstructor import ElectionConstructor, construct_irv, construct_h2h, construct_plurality
 
 
-class ExperimentalConfig:
+class ExperimentConfig:
     def __init__(self,
                  election_name: str,
                  training_cycles: float = 1000,
@@ -24,6 +24,7 @@ class ExperimentalConfig:
                  batch_size: int = 2048,
                  training_voters: int = 1000,
                  sampling_voters: int = 1000,
+                 quality_variance: float = 0,
                  path: str = "none"):
 
         if election_name == "IRV":
@@ -33,7 +34,7 @@ class ExperimentalConfig:
         elif election_name == "Plurality":
             self.election_constructor = ElectionConstructor(construct_plurality, "Plurality")
         else:
-            assert(False, f"Unrecognized election type {election_name}")
+            assert (False, f"Unrecognized election type {election_name}")
 
         self.election_name = election_name
         self.training_cycles = training_cycles
@@ -50,6 +51,7 @@ class ExperimentalConfig:
         self.training_voters = training_voters
         self.sampling_voters = sampling_voters
         self.population = self.create_population()
+        self.quality_variance = quality_variance
         self.path = path
 
     def save(self):
@@ -72,12 +74,12 @@ class ExperimentalConfig:
 
     def convert_candidates_to_input_vec(self, candidates: List[Candidate]) -> Tensor:
         cc = [self.convert_ideology_to_bin(c.ideology.vec[0]) for c in candidates]
-        x = np.zeros(shape=(1, self.n_bins), dtype=np.single)
+        x = np.zeros(shape = (1, self.n_bins), dtype = np.single)
         for c in cc:
             x[0, c] = 1
         return x
 
-    def gen_candidates_2(self, n: int):
+    def gen_candidates(self, n: int):
         cc = self.gen_random_candidates(n)
         ideologies = [c.ideology.vec[0] for c in cc]
         min_ideology = min(ideologies)
@@ -85,28 +87,17 @@ class ExperimentalConfig:
 
         span = .25
         if min_ideology > -span or max_ideology < span:
-            return self.gen_candidates_2(n)
+            return self.gen_candidates(n)
         else:
             return cc
-
-    def gen_candidates(self, n: int) -> List[Candidate]:
-        p = self.gen_prototype_candidates()
-        r = self.gen_random_candidates(n - len(p))
-        return p + r
-
-    @staticmethod
-    def gen_prototype_candidates() -> List[Candidate]:
-        c1 = Candidate("L", Independents, Ideology(np.array([-1.0])), 0)
-        c2 = Candidate("C", Independents, Ideology(np.array([0.0])), 0)
-        c3 = Candidate("R", Independents, Ideology(np.array([1.0])), 0)
-        return [c1, c2, c3]
 
     def gen_random_candidates(self, n: int) -> List[Candidate]:
         candidates = []
         while len(candidates) < n:
             ivec = self.population.unit_sample_voter().ideology.vec * .5
             if self.min_ideology < ivec[0] < self.max_ideology:
-                candidates.append(Candidate(f"c-{len(candidates)}", Independents, Ideology(ivec), 0))
+                quality = random.normalvariate(0, self.quality_variance)
+                candidates.append(Candidate(f"c-{len(candidates)}", Independents, Ideology(ivec), quality))
 
         return candidates
 
@@ -128,6 +119,6 @@ class ExperimentalConfig:
 
     @staticmethod
     def create_population() -> NDPopulation:
-        population_means = np.zeros(shape=(1,))
-        population_stddev = np.ones(shape=(1,))
+        population_means = np.zeros(shape = (1,))
+        population_stddev = np.ones(shape = (1,))
         return NDPopulation(population_means, population_stddev)

@@ -13,7 +13,7 @@ from elections.PopulationGroup import Independents
 from elections.ElectionConstructor import ElectionConstructor
 from network.Tensor import Tensor
 from network.ElectionModel import ElectionModel
-from ExperimentalConfig import ExperimentalConfig
+from ExperimentConfig import ExperimentConfig
 from network.ElectionMemory import ElectionMemory
 from network.LossTracker import LossTracker
 from elections.DefaultConfigOptions import unit_election_config
@@ -25,7 +25,7 @@ import math
 
 
 class ExtendedCandidate:
-    def __init__(self, base_candidate: Candidate, config: ExperimentalConfig):
+    def __init__(self, base_candidate: Candidate, config: ExperimentConfig):
         self.config = config
         self.base_candidate = base_candidate
         self.current_bin = self.config.convert_ideology_to_bin(base_candidate.ideology.vec[0])
@@ -80,7 +80,7 @@ class ExtendedCandidate:
 
 
 class Experiment:
-    def __init__(self, config: ExperimentalConfig):
+    def __init__(self, config: ExperimentConfig):
         self.config = config
         self._model = None
         self.memory = None
@@ -124,12 +124,21 @@ class Experiment:
         self.memory = m
         return self.memory
 
-    def run_sample_election(self, candidates: List[Candidate],
-                            process: ElectionConstructor,
+
+    def compute_random_results(self, count: int) -> List[Tuple[Candidate, List[Candidate]]]:
+        results = []
+        for i in range(count):
+            candidates = self.config.gen_candidates(5)
+            winner = self.run_sample_election(candidates, self.config.sampling_voters)
+            results.append((winner, candidates))
+        return results
+
+    def run_sample_election(self,
+                            candidates: List[Candidate],
                             n_voters: int) -> Candidate:
         voters = self.config.population.generate_unit_voters(n_voters)
         ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
-        result = process.run(ballots, set(candidates))
+        result = self.config.election_constructor.run(ballots, set(candidates))
         winner = result.winner()
         return winner
 
@@ -177,7 +186,7 @@ class Experiment:
 
         winners = []
         for i in range(n):
-            candidates = self.config.gen_candidates_2(5)
+            candidates = self.config.gen_candidates(5)
             # self.log_candidates(f"starting candidates", candidates)
             extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
             for bin_range in [3, 2, 1]:
@@ -185,7 +194,7 @@ class Experiment:
                 candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
                 # self.log_candidates(f"after adjust {bin_range}", candidates)
 
-            w = self.run_sample_election(candidates, process, self.config.sampling_voters)
+            w = self.run_sample_election(candidates, self.config.sampling_voters)
             if i % 100 == 0:
                 print(f"{i:5d} w.ideology: {w.ideology.vec[0]:.4}")
 
