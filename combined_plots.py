@@ -16,7 +16,7 @@ irv_config = ExperimentConfig("IRV",
                               training_voters = 400,
                               sampling_voters = 1000,
                               quality_variance = .1,
-                              path = "exp/h2h-0")
+                              path = "exp/irv-0")
 
 h2h_config = ExperimentConfig("H2H",
                               training_cycles = 20000,
@@ -44,7 +44,7 @@ pty_config = ExperimentConfig("Plurality",
                               training_voters = 400,
                               sampling_voters = 1000,
                               quality_variance = .1,
-                              path = "exp/h2h-0")
+                              path = "exp/plurality-0")
 
 cexp = CombinedExperiment([h2h_config, irv_config, pty_config], "exp/v1", 1000)
 cexp.run()
