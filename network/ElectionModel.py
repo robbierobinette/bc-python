@@ -24,6 +24,8 @@ class ElectionModel(tf.keras.Model):
             tip = layer(tip)
             tip = self.dropout(tip, training=training)
         logits = self.output_layer(tip)
+        # cap the logits
+        logits = 20 * tf.tanh(logits / 20)
         probability = self.softmax(logits)
         return probability
 

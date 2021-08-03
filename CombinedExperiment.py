@@ -10,6 +10,36 @@ from elections.Candidate import Candidate
 from elections.HeadToHeadElection import HeadToHeadElection
 
 
+class ExperimentResult:
+    def __init__(self,
+                 label: str,
+                 s_winners: np.ndarray, s_candidates: np.ndarray,
+                 r_winners: np.ndarray, r_candidates: np.ndarray,
+                 condorcet_tie_pct: float = 0):
+        self.label: str = label
+        self.s_winners = s_winners
+        self.s_candidates = s_candidates
+
+        self.r_winners = r_winners
+        self.r_candidates = r_candidates
+        self.condorcet_tie_pct = condorcet_tie_pct
+
+    @staticmethod
+    def compute_stats(ideologies: np.ndarray) -> (float, float):
+        sigma = np.mean(np.abs(ideologies))
+        representation = [CombinedExperiment.representation(i) for i in ideologies]
+        score = np.mean(representation)
+        return sigma, score
+
+    def print(self):
+        print(self.to_string())
+
+    def to_string(self) -> str:
+        r_sigma, r_score = self.compute_stats(self.r_winners)
+        s_sigma, s_score = self.compute_stats(self.s_winners)
+        return "%14s random sigma %5.2f score %5.2f strategic sigma %5.2f score %5.2f condorcet_ties %4.02f%%" % \
+               (self.label, r_sigma, r_score, s_sigma, s_score, self.condorcet_tie_pct)
+
 class CombinedExperiment:
     def __init__(self, configs: List[ExperimentConfig], path_base: str, n_races: int):
         self.path_base = path_base
@@ -19,15 +49,14 @@ class CombinedExperiment:
 
         self.experiments = [Experiment(config) for config in configs]
 
-    def run(self):
-        for exp in self.experiments:
-            self.run_experiement(exp)
+    def run(self) -> List[ExperimentResult]:
+        return [self.run_experiment(exp) for exp in self.experiments]
 
-    def run_experiement(self, exp: Experiment):
+    def run_experiment(self, exp: Experiment) -> ExperimentResult:
         HeadToHeadElection.count_of_ties = 0
-        strategic_results = exp.run_strategic_races_core(self.n_races)
-        if exp.config.election_name == "H2H":
-            print(f"number of Condorcet cycles:  {HeadToHeadElection.count_of_ties}")
+        strategic_results = exp.run_strategic_races_par(self.n_races)
+        # if exp.config.election_name == "H2H":
+        #     print(f"number of Condorcet cycles:  {HeadToHeadElection.count_of_ties}")
         random_results = exp.compute_random_results(self.n_races)
         name = exp.config.election_name
 
@@ -54,8 +83,19 @@ class CombinedExperiment:
         r_sigma, r_score = self.compute_winner_stats(random_results)
         s_sigma, s_score = self.compute_winner_stats(strategic_results)
 
-        print("%14s random sigma %5.2f score %5.2f strategic sigma %5.2f score %5.2f" %
-              (name, r_sigma, r_score, s_sigma, s_score))
+        ties = HeadToHeadElection.count_of_ties / self.n_races
+        s_winners = np.array(list(map(lambda x: x[0].ideology.vec[0], strategic_results)))
+        r_winners = np.array(list(map(lambda x: x[0].ideology.vec[0], random_results)))
+
+        sc_i = []
+        for w, cc in strategic_results:
+            sc_i = sc_i + [c.ideology.vec[0] for c in cc]
+
+        rc_i = []
+        for w, cc in random_results:
+            rc_i = rc_i + [c.ideology.vec[0] for c in cc]
+
+        return ExperimentResult(exp.config.name, s_winners, r_winners, sc_i, rc_i, ties)
 
     def winning_ideologies(self, results: List[Tuple[Candidate, List[Candidate]]]):
         ideologies = []
@@ -104,7 +144,8 @@ class CombinedExperiment:
         pct = CombinedExperiment.cumulative_normal_dist(sigma)
         return 100 * (1 - 2 * abs(.5 - pct))
 
-    def compute_winner_stats(self, results: List[Tuple[Candidate, List[Candidate]]]) -> (float, float):
+    @staticmethod
+    def compute_winner_stats(results: List[Tuple[Candidate, List[Candidate]]]) -> (float, float):
         winners = list(map(lambda x: x[0].ideology.vec[0], results))
         sigmas = [abs(x) for x in winners]
         rr = [CombinedExperiment.representation(x) for x in winners]

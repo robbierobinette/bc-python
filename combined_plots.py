@@ -1,50 +1,107 @@
 from CombinedExperiment import CombinedExperiment
 from ExperimentConfig import ExperimentConfig
+from Experiment import Experiment
 from util.snap import snap
+from copy import copy
+from typing import List
+from joblib import Parallel, delayed
+from CombinedExperiment import ExperimentResult
 
-snap("v1")
+version = "v3"
+snap(version)
 n_races = 1000
-irv_config = ExperimentConfig("IRV",
-                              training_cycles = 20000,
-                              ideology_range = 1.5,
-                              ideology_flexibility = .7,
-                              n_bins = 21,
-                              model_width = 512,
-                              model_layers = 3,
-                              memory_size = 50000,
-                              batch_size = 2048,
-                              training_voters = 400,
-                              sampling_voters = 1000,
-                              quality_variance = .1,
-                              path = "exp/irv-0")
+base_config = ExperimentConfig(name="none",
+                               election_name="none",
+                               training_cycles=20000,
+                               ideology_range=1.5,
+                               ideology_flexibility=.7,
+                               n_bins=21,
+                               model_width=512,
+                               model_layers=3,
+                               memory_size=100000,
+                               batch_size=2048,
+                               training_voters=400,
+                               sampling_voters=1000,
+                               quality_variance=0,
+                               model_path="none")
 
-h2h_config = ExperimentConfig("H2H",
-                              training_cycles = 20000,
-                              ideology_range = 1.5,
-                              ideology_flexibility = .7,
-                              n_bins = 21,
-                              model_width = 512,
-                              model_layers = 3,
-                              memory_size = 50000,
-                              batch_size = 2048,
-                              training_voters = 400,
-                              sampling_voters = 1000,
-                              quality_variance =.1,
-                              path = "exp/h2h-0")
+irv_config = copy(base_config)
+irv_config.election_name = "IRV"
+irv_config.model_path = f"exp/{version}/IRV"
+irv_config.name = "IRV"
 
-pty_config = ExperimentConfig("Plurality",
-                              training_cycles = 20000,
-                              ideology_range = 1.5,
-                              ideology_flexibility = .7,
-                              n_bins = 21,
-                              model_width = 512,
-                              model_layers = 3,
-                              memory_size = 50000,
-                              batch_size = 2048,
-                              training_voters = 400,
-                              sampling_voters = 1000,
-                              quality_variance = .1,
-                              path = "exp/plurality-0")
+h2h_config = copy(base_config)
+h2h_config.election_name = "H2H"
+h2h_config.model_path = f"exp/{version}/H2H"
+h2h_config.name = "Condorcet-Minimax"
 
-cexp = CombinedExperiment([h2h_config, irv_config, pty_config], "exp/v1", 1000)
-cexp.run()
+pty_config = copy(base_config)
+pty_config.election_name = "Plurality"
+pty_config.model_path = f"exp/{version}/plurality"
+pty_config.name = "Plurality"
+
+base_configs = [h2h_config, irv_config, pty_config]
+
+
+def touch_model(config: ExperimentConfig):
+    x = Experiment(config).model()
+    return True
+
+
+def build_base_models(configs: List[ExperimentConfig]):
+    base_results = Parallel(n_jobs=16)(delayed(touch_model)(c) for c in configs)
+    return base_results
+
+
+import numpy as np
+
+
+def build_quality_variants(base_configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
+    cc: List[ExperimentConfig] = []
+    for c in base_configs:
+        for qv in np.arange(0, .11, .01):
+            nc = copy(c)
+            nc.quality_variance = qv
+            nc.name = "%s-qv-%04.02f" % (c.name, qv)
+            cc.append(nc)
+    return cc
+
+
+def build_flex_variants(base_configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
+    cc: List[ExperimentConfig] = []
+    for c in base_configs:
+        for fx in np.arange(0, .7, .1):
+            nc = copy(c)
+            nc.ideology_flexibility = fx
+            nc.name = "%s-flex-%04.1f" % (c.name, fx)
+            cc.append(nc)
+    return cc
+
+
+def run_variant(config: ExperimentConfig) -> ExperimentResult:
+    exp = CombinedExperiment([config], path_base="exp/v0", n_races=n_races)
+    result = exp.run()[0]
+    return result
+
+
+def build_variants():
+    q_v = build_quality_variants(base_configs)
+    f_v = build_flex_variants(base_configs)
+    all_variants = q_v + f_v
+    print(f"{len(all_variants)} variants to build.")
+
+    all_results = Parallel(n_jobs=16)(delayed(run_variant)(c) for c in all_variants)
+
+    import os
+    os.system(f"mkdir -p exp/{version}")
+    with open(f"exp/{version}/summary.txt", "w") as f:
+        for r in all_results:
+            f.write(r.to_string() + "\n")
+
+    for r in all_results:
+        r.print()
+
+
+base_results = build_base_models(base_configs)
+print(f"base_results: {base_results}")
+build_variants()

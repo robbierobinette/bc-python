@@ -30,6 +30,10 @@ class ElectionMemory:
             mask[0, candidates[i]] = 1
 
             self.add_sample_np(x, mask, y)
+            self.add_sample_np(np.flip(x, axis=1),
+                               np.flip(mask, axis=1),
+                               np.flip(y, axis=1)
+                               )
 
     def add_sample_np(self, x: np.ndarray, mask: np.ndarray, y: np.ndarray):
         sr = self.count % self.max_size

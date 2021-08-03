@@ -1,27 +1,20 @@
-from elections.Ideology import Ideology
-import random
+import math
+import os.path as path
 from typing import List, Tuple
 
-import numpy as np
-
 import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+from joblib import Parallel, delayed
+
+from ExperimentConfig import ExperimentConfig
 from elections.Ballot import Ballot
 from elections.Candidate import Candidate
-from elections.Ideology import Ideology
-from elections.NDPopulation import NDPopulation
-from elections.PopulationGroup import Independents
-from elections.ElectionConstructor import ElectionConstructor
-from network.Tensor import Tensor
-from network.ElectionModel import ElectionModel
-from ExperimentConfig import ExperimentConfig
-from network.ElectionMemory import ElectionMemory
-from network.LossTracker import LossTracker
 from elections.DefaultConfigOptions import unit_election_config
-import os.path as path
-import tensorflow as tf
-from network.ElectionModel import ElectionModel, ElectionModelTrainer
+from elections.Ideology import Ideology
 from network.ElectionMemory import ElectionMemory
-import math
+from network.ElectionModel import ElectionModel, ElectionModelTrainer
+from network.LossTracker import LossTracker
 
 
 class ExtendedCandidate:
@@ -33,7 +26,7 @@ class ExtendedCandidate:
 
     def win_bonus(self, ideology: float) -> float:
         delta = math.fabs(ideology - self.base_candidate.ideology.vec[0])
-        wb = max(1 - delta / self.config.ideology_flexibility, 0.0)
+        wb = max(1 - delta / max(1e-5, self.config.ideology_flexibility), 0.0)
         # print(f"win_bonus:  base_ideology {self.base_candidate.ideology.vec[0]:.4f}" +
         #       f"ideology {ideology:.4f} delta {delta:.4f}")
         return wb
@@ -85,7 +78,7 @@ class Experiment:
         self._model = None
         self.memory = None
 
-        self.model_path = f"{self.config.path}.mdl"
+        self.model_path = f"{self.config.model_path}.mdl"
 
     def model(self) -> ElectionModel:
         if self._model:
@@ -110,20 +103,18 @@ class Experiment:
         return network
 
     def populate_memory(self, count: int) -> ElectionMemory:
-        m = ElectionMemory(count * 5, self.config.n_bins)
-        process = self.config.election_constructor
-        print(f"populating training memory with {count * 5} samples")
+        m = ElectionMemory(count * 10, self.config.n_bins)
+        print(f"populating training memory with {count * 10} samples")
         for i in range(count):
             cc = self.config.gen_random_candidates(5)
-            w = self.run_sample_election(cc, process, self.config.training_voters)
+            w = self.run_sample_election(cc, self.config.training_voters)
             ci, wi = self.config.create_training_sample(cc, w)
             m.add_sample(ci, wi)
-            if i % 100 == 0:
-                print(".", end='')
+            if i % 1000 == 0:
+                print(f"sample {i}", end='\r')
         print(f"\nm.count {m.count}")
         self.memory = m
         return self.memory
-
 
     def compute_random_results(self, count: int) -> List[Tuple[Candidate, List[Candidate]]]:
         results = []
@@ -138,7 +129,8 @@ class Experiment:
                             n_voters: int) -> Candidate:
         voters = self.config.population.generate_unit_voters(n_voters)
         ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
-        result = self.config.election_constructor.run(ballots, set(candidates))
+        process = self.config.election_constructor()
+        result = process.run(ballots, set(candidates))
         winner = result.winner()
         return winner
 
@@ -160,7 +152,7 @@ class Experiment:
                 average_loss = tracker.add_loss(loss)
                 if i % 1000 == 0:
                     print(f"epoch {i:5d} loss = {average_loss:.6}")
-                    current_path = f"mdl.sav.{i}"
+                    current_path = f"{self.config.model_path}.{i}"
                     net.save(current_path, overwrite=True)
 
         return net, average_loss
@@ -171,57 +163,52 @@ class Experiment:
         for c in cc:
             print(f"\tcandidate {c.name}, {c.ideology.vec[0]:.4f}")
 
-    def run_strategic_races(self, n: int) -> np.ndarray:
-        winners = self.run_strategic_races_core(n)
-        winner_ideology = []
-        for (w, cc) in winners:
-            winner_ideology.append(w.ideology.vec[0])
-
-        return np.array(winners)
-
     def run_strategic_races_core(self, n: int) -> List[Tuple[Candidate, List[Candidate]]]:
-        process = self.config.election_constructor
         model = self.model()
-        population = self.config.population
-
         winners = []
         for i in range(n):
-            candidates = self.config.gen_candidates(5)
-            # self.log_candidates(f"starting candidates", candidates)
-            extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
-            for bin_range in [3, 2, 1]:
-                cc = [ec.current_candidate for ec in extended_candidates]
-                candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
-                # self.log_candidates(f"after adjust {bin_range}", candidates)
-
-            w = self.run_sample_election(candidates, self.config.sampling_voters)
-            if i % 100 == 0:
-                print(f"{i:5d} w.ideology: {w.ideology.vec[0]:.4}")
-
-            winners.append((w, candidates))
+            w, cc = self.run_strategic_race()
+            winners.append((w, cc))
 
         return winners
+
+    def run_strategic_races_par(self, n: int) -> List[Tuple[Candidate, List[Candidate]]]:
+        model = self.model()
+        winners = Parallel(n_jobs=16)(delayed(self.run_strategic_race)() for _ in range(n))
+        return winners
+
+    def run_strategic_race(self) -> (Candidate, List[Candidate]):
+        model = self.model()
+        candidates = self.config.gen_candidates(5)
+        extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
+        for bin_range in [3, 2, 1]:
+            cc = [ec.current_candidate for ec in extended_candidates]
+            candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
+            # self.log_candidates(f"after adjust {bin_range}", candidates)
+
+        w = self.run_sample_election(candidates, self.config.sampling_voters)
+        return w, cc
 
     @staticmethod
     def plot_results(results: List[List[float]], title: str, labels: List[str]):
         n_rows = 1
         n_cols = 1
-        fig, axis = plt.subplots(nrows = n_rows, ncols = n_cols, figsize = (20, 10))
-        fig.suptitle(title, color = "black", fontsize = 22)
+        fig, axis = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 10))
+        fig.suptitle(title, color="black", fontsize=22)
         fig.set_facecolor("white")
 
         count = 0
-        plt.xticks(fontsize = 16)
-        plt.yticks(fontsize = 16)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
 
-        axis.tick_params(axis = 'x', colors = "black")
-        axis.tick_params(axis = 'y', colors = "black")
+        axis.tick_params(axis='x', colors="black")
+        axis.tick_params(axis='y', colors="black")
         axis.set_xlim([-1, 1])
 
         bins = np.arange(-1, 1, 2 / 21)
-        axis.hist(results, bins = bins, label = labels, edgecolor = 'white', stacked = True)
+        axis.hist(results, bins=bins, label=labels, edgecolor='white', stacked=True)
         axis.legend()
-        axis.set_xlabel("Sigma From Origin", fontsize = 20)
-        axis.set_ylabel("Frequency of Winner at Ideology", fontsize = 20)
+        axis.set_xlabel("Sigma From Origin", fontsize=20)
+        axis.set_ylabel("Frequency of Winner at Ideology", fontsize=20)
 
         plt.savefig("foo.png")
