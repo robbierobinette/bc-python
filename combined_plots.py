@@ -7,7 +7,7 @@ from typing import List
 from joblib import Parallel, delayed
 from CombinedExperiment import ExperimentResult
 
-version = "v3"
+version = "v6"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
@@ -23,6 +23,8 @@ base_config = ExperimentConfig(name="none",
                                training_voters=400,
                                sampling_voters=1000,
                                quality_variance=0,
+                               candidate_variance=0.5,
+                               equal_pct_bins=True,
                                model_path="none")
 
 irv_config = copy(base_config)
@@ -59,7 +61,7 @@ import numpy as np
 def build_quality_variants(base_configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
     cc: List[ExperimentConfig] = []
     for c in base_configs:
-        for qv in np.arange(0, .11, .01):
+        for qv in np.arange(0, .21, .02):
             nc = copy(c)
             nc.quality_variance = qv
             nc.name = "%s-qv-%04.02f" % (c.name, qv)
@@ -70,7 +72,7 @@ def build_quality_variants(base_configs: List[ExperimentConfig]) -> List[Experim
 def build_flex_variants(base_configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
     cc: List[ExperimentConfig] = []
     for c in base_configs:
-        for fx in np.arange(0, .7, .1):
+        for fx in np.arange(0, 1.01, .1):
             nc = copy(c)
             nc.ideology_flexibility = fx
             nc.name = "%s-flex-%04.1f" % (c.name, fx)
@@ -85,12 +87,13 @@ def run_variant(config: ExperimentConfig) -> ExperimentResult:
 
 
 def build_variants():
-    q_v = build_quality_variants(base_configs)
+    q_v = build_quality_variants([h2h_config])
     f_v = build_flex_variants(base_configs)
     all_variants = q_v + f_v
     print(f"{len(all_variants)} variants to build.")
 
-    all_results = Parallel(n_jobs=16)(delayed(run_variant)(c) for c in all_variants)
+    all_results = Parallel(n_jobs=32)(delayed(run_variant)(c) for c in all_variants)
+    # all_results = [run_variant(c) for c in all_variants]
 
     import os
     os.system(f"mkdir -p exp/{version}")

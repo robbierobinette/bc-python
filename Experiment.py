@@ -12,10 +12,21 @@ from elections.Ballot import Ballot
 from elections.Candidate import Candidate
 from elections.DefaultConfigOptions import unit_election_config
 from elections.Ideology import Ideology
+from elections.Voter import Voter
+from elections.HeadToHeadElection import HeadToHeadElection
 from network.ElectionMemory import ElectionMemory
 from network.ElectionModel import ElectionModel, ElectionModelTrainer
 from network.LossTracker import LossTracker
 
+
+class RaceResult:
+    def __init__(self, winner: Candidate, candidates: List[Candidate], base_candidates: List[Candidate], utilities: np.array, base_utilities: np.array, condorcet_tie: bool = False):
+        self.winner = winner
+        self.candidates = candidates
+        self.base_candidates = base_candidates
+        self.utilities = utilities
+        self.base_utilities = base_utilities
+        self.condorcet_tie = condorcet_tie
 
 class ExtendedCandidate:
     def __init__(self, base_candidate: Candidate, config: ExperimentConfig):
@@ -41,7 +52,7 @@ class ExtendedCandidate:
         best_return = 1e-6
         best_ideology = self.current_candidate.ideology.vec[0]
 
-        b_start = self.current_bin - bin_range
+        b_start = max(0, self.current_bin - bin_range)
         b_end = min(self.config.n_bins, self.current_bin + bin_range + 1)
         for b in range(b_start, b_end):
             ideology = self.config.convert_bin_to_ideology(b)
@@ -89,7 +100,7 @@ class Experiment:
     def get_or_train_model(self) -> ElectionModel:
         if path.exists(self.model_path):
             # print(f"loading {self.model_path}")
-            self._model = tf.keras.models.load_model(self.model_path)
+            self._model = tf.keras.models.load_model(self.model_path, compile=False)
         else:
             self._model = self.train_model()
             self._model.save(self.model_path)
@@ -107,7 +118,8 @@ class Experiment:
         print(f"populating training memory with {count * 10} samples")
         for i in range(count):
             cc = self.config.gen_random_candidates(5)
-            w = self.run_sample_election(cc, self.config.training_voters)
+            voters = self.config.population.generate_unit_voters(self.config.training_voters)
+            w = self.run_election(cc, voters)
             ci, wi = self.config.create_training_sample(cc, w)
             m.add_sample(ci, wi)
             if i % 1000 == 0:
@@ -116,18 +128,32 @@ class Experiment:
         self.memory = m
         return self.memory
 
-    def compute_random_results(self, count: int) -> List[Tuple[Candidate, List[Candidate]]]:
-        results = []
+    def compute_random_results(self, count: int) -> List[RaceResult]:
+        results: List[RaceResult] = []
         for i in range(count):
             candidates = self.config.gen_candidates(5)
-            winner = self.run_sample_election(candidates, self.config.sampling_voters)
-            results.append((winner, candidates))
+            voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
+            HeadToHeadElection.count_of_ties = 0
+            winner = self.run_election(candidates, voters)
+            utilities = self.compute_utilities(winner, candidates, voters)
+            results.append(RaceResult(winner, candidates, candidates, utilities, utilities, HeadToHeadElection.count_of_ties > 0))
         return results
 
-    def run_sample_election(self,
-                            candidates: List[Candidate],
-                            n_voters: int) -> Candidate:
-        voters = self.config.population.generate_unit_voters(n_voters)
+    @staticmethod
+    def compute_utilities(winner: Candidate, all_candidates: List[Candidate], voters: List[Voter]) -> np.ndarray:
+        c_set = set(all_candidates)
+        c_set.remove(winner)
+        candidates = [winner] + list(c_set)
+
+        def compute_utility(c) -> float:
+            u = [-v.ideology.distance(c.ideology) for v in voters]
+            return np.mean(u)
+
+        return np.array([compute_utility(c) for c in candidates])
+
+    def run_election(self,
+                     candidates: List[Candidate],
+                     voters: List[Voter]) -> Candidate:
         ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
         process = self.config.election_constructor()
         result = process.run(ballots, set(candidates))
@@ -163,31 +189,32 @@ class Experiment:
         for c in cc:
             print(f"\tcandidate {c.name}, {c.ideology.vec[0]:.4f}")
 
-    def run_strategic_races_core(self, n: int) -> List[Tuple[Candidate, List[Candidate]]]:
-        model = self.model()
-        winners = []
+    def run_strategic_races(self, n: int) -> List[RaceResult]:
+        winners: List[RaceResult] = []
         for i in range(n):
-            w, cc = self.run_strategic_race()
-            winners.append((w, cc))
-
+            winners.append(self.run_strategic_race())
         return winners
 
-    def run_strategic_races_par(self, n: int) -> List[Tuple[Candidate, List[Candidate]]]:
-        model = self.model()
-        winners = Parallel(n_jobs=16)(delayed(self.run_strategic_race)() for _ in range(n))
+    def run_strategic_races_par(self, n: int) -> List[RaceResult]:
+        winners: List[RaceResult] = Parallel(n_jobs=16)(delayed(self.run_strategic_race)() for _ in range(n))
         return winners
 
-    def run_strategic_race(self) -> (Candidate, List[Candidate]):
+    def run_strategic_race(self) -> RaceResult:
         model = self.model()
         candidates = self.config.gen_candidates(5)
+        base_candidates = candidates
         extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
         for bin_range in [3, 2, 1]:
             cc = [ec.current_candidate for ec in extended_candidates]
             candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
             # self.log_candidates(f"after adjust {bin_range}", candidates)
 
-        w = self.run_sample_election(candidates, self.config.sampling_voters)
-        return w, cc
+        voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
+        HeadToHeadElection.count_of_ties = 0
+        w = self.run_election(candidates, voters)
+        strategic_utilities = self.compute_utilities(w, candidates, voters)
+        base_utilities = self.compute_utilities(base_candidates[0], base_candidates, voters)
+        return RaceResult(w, candidates, base_candidates, strategic_utilities, base_utilities, HeadToHeadElection.count_of_ties > 0)
 
     @staticmethod
     def plot_results(results: List[List[float]], title: str, labels: List[str]):

@@ -3,7 +3,7 @@ from .Candidate import Candidate
 
 
 class ElectionResult:
-    def __init__(self, ordered_candidates: List[Candidate]):
+    def __init__(self, ordered_candidates: List[Candidate], utilities: List[float] = []):
         self.ordered_candidates = ordered_candidates
 
     def winner(self) -> Candidate:
