@@ -10,6 +10,7 @@ from joblib import Parallel, delayed
 from ExperimentConfig import ExperimentConfig
 from elections.Ballot import Ballot
 from elections.Candidate import Candidate
+from elections.ElectionResult import ElectionResult
 from elections.DefaultConfigOptions import unit_election_config
 from elections.Ideology import Ideology
 from elections.Voter import Voter
@@ -27,6 +28,39 @@ class RaceResult:
         self.utilities = utilities
         self.base_utilities = base_utilities
         self.condorcet_tie = condorcet_tie
+
+class ErrorTracker:
+    def __init__(self, decay: float, epsilon: float, min_iterations: int, max_static_iterations: int):
+        self.decay = decay
+        self.epsilon = epsilon
+        self.min_iterations = min_iterations
+        self.max_static_iterations = max_static_iterations
+        self.last_step_iter = 0
+        self.last_step_loss = 0
+        self.iteration = 0
+        self.loss = 0
+
+    def add_loss(self, loss: float):
+        # ignore the first 100 iterations, they are too noisy.
+        if self.iteration == 0:
+            self.loss = loss
+            self.last_step_iter = self.iteration
+            self.last_step_loss = loss
+        else:
+            self.loss = (1 - self.decay) * self.loss + self.decay * loss
+
+            if self.loss < self.last_step_loss - self.epsilon:
+                self.last_step_iter = self.iteration
+                self.last_step_loss = loss
+
+        self.iteration += 1
+
+        return self.loss
+
+    def complete(self) -> bool:
+        return self.iteration > self.min_iterations and \
+               self.iteration - self.last_step_iter > self.max_static_iterations
+
 
 class ExtendedCandidate:
     def __init__(self, base_candidate: Candidate, config: ExperimentConfig):
@@ -88,8 +122,8 @@ class Experiment:
         self.config = config
         self._model = None
         self.memory = None
-
         self.model_path = f"{self.config.model_path}.mdl"
+        self.error_tracker = ErrorTracker(.0001, 1e-5, 40000, 10000)
 
     def model(self) -> ElectionModel:
         if self._model:
@@ -108,7 +142,7 @@ class Experiment:
         return self._model
 
     def train_model(self) -> ElectionModel:
-        network = ElectionModel(self.config.n_bins, self.config.model_width, self.config.model_layers)
+        network = ElectionModel(self.config.election_name, self.config.n_bins, self.config.model_width, self.config.model_layers)
         self.populate_memory(self.config.memory_size)
         network, loss = self.train_network(network, self.memory, self.config.training_cycles, self.config.batch_size)
         return network
@@ -119,7 +153,8 @@ class Experiment:
         for i in range(count):
             cc = self.config.gen_random_candidates(5)
             voters = self.config.population.generate_unit_voters(self.config.training_voters)
-            w = self.run_election(cc, voters)
+            result = self.run_election(cc, voters)
+            w = result.winner()
             ci, wi = self.config.create_training_sample(cc, w)
             m.add_sample(ci, wi)
             if i % 1000 == 0:
@@ -133,10 +168,10 @@ class Experiment:
         for i in range(count):
             candidates = self.config.gen_candidates(5)
             voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
-            HeadToHeadElection.count_of_ties = 0
-            winner = self.run_election(candidates, voters)
+            result = self.run_election(candidates, voters)
+            winner = result.winner()
             utilities = self.compute_utilities(winner, candidates, voters)
-            results.append(RaceResult(winner, candidates, candidates, utilities, utilities, HeadToHeadElection.count_of_ties > 0))
+            results.append(RaceResult(winner, candidates, candidates, utilities, utilities, result.is_tie))
         return results
 
     @staticmethod
@@ -153,33 +188,33 @@ class Experiment:
 
     def run_election(self,
                      candidates: List[Candidate],
-                     voters: List[Voter]) -> Candidate:
+                     voters: List[Voter]) -> ElectionResult:
         ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
         process = self.config.election_constructor()
         result = process.run(ballots, set(candidates))
-        winner = result.winner()
-        return winner
+        return result
 
     def train_network(self, net: ElectionModel, memory: ElectionMemory, n_batches: int, batch_size: int):
-        print(f"training network for {n_batches} epochs")
-        tracker = LossTracker(1000)
+        print(f"training network for max of {n_batches} epochs")
+        tracker = self.error_tracker
         trainer = ElectionModelTrainer(net)
-        current_path = ""
+        progress_path = f"{self.config.model_path}.progress"
         average_loss = 0
 
-        for i in range(n_batches):
+        i = 0
+        while i < n_batches and not tracker.complete():
+            i += 1
             x, a, y = memory.get_batch(batch_size)
             loss = trainer.update(x, a, y)
             if np.isnan(loss):
-                print(f"loss is nan, reverting to {current_path}")
-                net = tf.keras.models.load_model(current_path)
+                print(f"loss is nan, reverting to {progress_path}")
+                net = tf.keras.models.load_model(progress_path)
                 trainer = ElectionModelTrainer(net)
             else:
                 average_loss = tracker.add_loss(loss)
                 if i % 1000 == 0:
                     print(f"epoch {i:5d} loss = {average_loss:.6}")
-                    current_path = f"{self.config.model_path}.{i}"
-                    net.save(current_path, overwrite=True)
+                    net.save(progress_path, overwrite=True)
 
         return net, average_loss
 
@@ -196,7 +231,7 @@ class Experiment:
         return winners
 
     def run_strategic_races_par(self, n: int) -> List[RaceResult]:
-        winners: List[RaceResult] = Parallel(n_jobs=16)(delayed(self.run_strategic_race)() for _ in range(n))
+        winners: List[RaceResult] = Parallel(n_jobs=32)(delayed(self.run_strategic_race)() for _ in range(n))
         return winners
 
     def run_strategic_race(self) -> RaceResult:
@@ -211,10 +246,11 @@ class Experiment:
 
         voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
         HeadToHeadElection.count_of_ties = 0
-        w = self.run_election(candidates, voters)
+        result = self.run_election(candidates, voters)
+        w = result.winner()
         strategic_utilities = self.compute_utilities(w, candidates, voters)
         base_utilities = self.compute_utilities(base_candidates[0], base_candidates, voters)
-        return RaceResult(w, candidates, base_candidates, strategic_utilities, base_utilities, HeadToHeadElection.count_of_ties > 0)
+        return RaceResult(w, candidates, base_candidates, strategic_utilities, base_utilities, result.is_tie)
 
     @staticmethod
     def plot_results(results: List[List[float]], title: str, labels: List[str]):

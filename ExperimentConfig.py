@@ -16,7 +16,7 @@ class ExperimentConfig:
     def __init__(self,
                  name: str,
                  election_name: str,
-                 training_cycles: float = 10000,
+                 training_cycles: int = 10000,
                  ideology_range: float = 1.5,
                  ideology_flexibility: float = .7,
                  n_bins: int = 21,

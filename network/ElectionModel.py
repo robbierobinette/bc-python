@@ -4,8 +4,9 @@ from datetime import datetime
 
 
 class ElectionModel(tf.keras.Model):
-    def __init__(self, n_bins: int, width: int, n_layers: int):
+    def __init__(self, process_name: str, n_bins: int, width: int, n_layers: int):
         super(ElectionModel, self).__init__()
+        self.process_name = process_name
         self.n_bins = n_bins
         self.width = width
         self.n_layers = n_layers
@@ -36,7 +37,7 @@ class ElectionModelTrainer:
         self.optimizer = tf.keras.optimizers.Adam()
 
         current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.log_dir = 'logs/' + current_time + '/train'
+        self.log_dir = f'logs/{self.model.process_name}-' + current_time + '/train'
         self.summary_writer = tf.summary.create_file_writer(self.log_dir)
         self.model_path = ""
         self.global_step = 0

@@ -89,10 +89,7 @@ class CombinedExperiment:
         return (winning_utility - average_utility) / (max_utility - average_utility)
 
     def run_experiment(self, exp: Experiment) -> ExperimentResult:
-        HeadToHeadElection.count_of_ties = 0
         race_results = exp.run_strategic_races(self.n_races)
-        # if exp.config.election_name == "H2H":
-        #     print(f"number of Condorcet cycles:  {HeadToHeadElection.count_of_ties}")
         random_results = exp.compute_random_results(self.n_races)
         name = exp.config.election_name
 
@@ -119,7 +116,12 @@ class CombinedExperiment:
         r_sigma, r_score = self.compute_winner_stats(random_results)
         s_sigma, s_score = self.compute_winner_stats(race_results)
 
-        ties = HeadToHeadElection.count_of_ties / self.n_races
+        count_of_ties = 0
+        for r in race_results:
+            if r.condorcet_tie:
+                count_of_ties += 1
+
+        ties = count_of_ties / self.n_races
         s_winners = np.array([r.winner.ideology.vec[0] for r in race_results])
         r_winners = np.array([r.winner.ideology.vec[0] for r in random_results])
 

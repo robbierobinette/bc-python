@@ -8,19 +8,13 @@ from .ElectionResult import ElectionResult
 
 
 class HeadToHeadResult(ElectionResult):
-    def __init__(self, oc, rm):
-        super().__init__(oc)
-        self.rm = rm
-    # def __init__(self, ordered_candidates: List[Candidate], result_matrix: npt.ArrayLike[float]):
-    #     super().__init__(ordered_candidates)
-    #     self.result_matrix = result_matrix
+    def __init__(self, ordered_candidates, result_matrix, is_tie):
+        super().__init__(ordered_candidates)
+        self.result_matrix = result_matrix
+        self.is_tie = is_tie
 
 
 class HeadToHeadElection(Election):
-
-    # count the number of times a tie, aka Condorcet paradox occurs
-    count_of_ties = 0
-
     def __init__(self, ballots: BallotIter, candidates: Set[Candidate]):
         super().__init__(ballots, candidates)
         self.candidate_list = list(self.candidates)
@@ -32,7 +26,7 @@ class HeadToHeadElection(Election):
 
     def result(self) -> ElectionResult:
         oc = self.minimax(self.candidates)
-        return HeadToHeadResult(oc, self.result_matrix)
+        return HeadToHeadResult(oc, self.result_matrix, self.check_for_tie(self.candidates))
 
     def compute_matrix(self) -> np.array:
         n_candidates = len(self.candidates)
@@ -49,6 +43,7 @@ class HeadToHeadElection(Election):
 
         return results
 
+    # returns votes for c1 - votes for c2
     def delta(self, c1: Candidate, c2: Candidate) -> float:
         r = self.indices[c1]
         c = self.indices[c2]
@@ -61,6 +56,16 @@ class HeadToHeadElection(Election):
         losses = [-self.delta(candidate, c2) for c2 in opponents]
         return max(losses)
 
+    def check_for_tie(self, active_candidates: Set[Candidate]) -> bool:
+        for r in range(self.result_matrix.shape[0]):
+            has_loss = False
+            for c in range(self.result_matrix.shape[1]):
+                if self.result_matrix[r, c] - self.result_matrix[c, r] < 0:
+                    has_loss = True
+            if not has_loss:
+                return False
+        return True
+
     def minimax(self, active_candidates: Set[Candidate]) -> List[Candidate]:
         if len(active_candidates) == 1:
             return list(active_candidates)
@@ -69,11 +74,6 @@ class HeadToHeadElection(Election):
         max_losses: List[Tuple[Candidate, float]] = [(ci, self.max_loss(ci, ac)) for ci in ac]
 
         max_losses.sort(key=lambda x: x[1])
-
-        # count all elections where, in the first round, there is a Condorcet-tie
-        if len(active_candidates) == len(self.candidates):
-            if max_losses[0][1] > 0:
-                HeadToHeadElection.count_of_ties += 1
 
         winner = max_losses[0][0]
         ac.remove(winner)

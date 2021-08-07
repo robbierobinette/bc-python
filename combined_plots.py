@@ -6,13 +6,15 @@ from copy import copy
 from typing import List
 from joblib import Parallel, delayed
 from CombinedExperiment import ExperimentResult
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v6"
+version = "v10"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
                                election_name="none",
-                               training_cycles=20000,
+                               training_cycles=200000,
                                ideology_range=1.5,
                                ideology_flexibility=.7,
                                n_bins=21,
@@ -81,7 +83,7 @@ def build_flex_variants(base_configs: List[ExperimentConfig]) -> List[Experiment
 
 
 def run_variant(config: ExperimentConfig) -> ExperimentResult:
-    exp = CombinedExperiment([config], path_base="exp/v0", n_races=n_races)
+    exp = CombinedExperiment([config], path_base=f"exp/{version}", n_races=n_races)
     result = exp.run()[0]
     return result
 
