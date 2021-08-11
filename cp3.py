@@ -9,12 +9,12 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v11"
+version = "v13"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
                                election_name="none",
-                               training_cycles=200000,
+                               training_cycles=100000,
                                ideology_range=1.5,
                                ideology_flexibility=.7,
                                n_bins=21,
@@ -58,7 +58,6 @@ def build_base_models(configs: List[ExperimentConfig]):
 
 
 import numpy as np
-
 
 def build_quality_variants(base_configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
     cc: List[ExperimentConfig] = []

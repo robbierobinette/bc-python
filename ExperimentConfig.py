@@ -10,6 +10,10 @@ from elections.PopulationGroup import Independents
 from network.Tensor import Tensor
 from elections.ElectionConstructor import ElectionConstructor, construct_irv, construct_h2h, construct_plurality
 from elections.GaussianHelpers import cumulative_normal_dist, rank_to_sigma
+from elections.Ballot import Ballot
+from elections.DefaultConfigOptions import unit_election_config
+from elections.Voter import Voter
+from elections.ElectionResult import ElectionResult
 
 
 class ExperimentConfig:
@@ -118,11 +122,11 @@ class ExperimentConfig:
             return self.convert_bin_to_ideology_sigma(bin)
 
 
-    def convert_ideology_to_bin(self, bin: int) -> float:
+    def convert_ideology_to_bin(self, ideology: float) -> float:
         if self.equal_pct_bins:
-            return self.convert_ideology_to_bin_pct(bin)
+            return self.convert_ideology_to_bin_pct(ideology)
         else:
-            return self.convert_ideology_to_bin_sigma(bin)
+            return self.convert_ideology_to_bin_sigma(ideology)
 
 
     def convert_bin_to_ideology_pct(self, bin: int) -> float:
@@ -143,7 +147,23 @@ class ExperimentConfig:
         ideology = self.min_ideology + self.sigma_step * bin + random.uniform(0, self.sigma_step)
         return ideology
 
-    def create_training_sample(self, candidates: List[Candidate], winner: Candidate) -> (int, list[int]):
+    def create_sample_for_memory(self) -> (list[int], int):
+        cc = self.gen_random_candidates(5)
+        voters = self.population.generate_unit_voters(self.training_voters)
+        result = self.run_election(cc, voters)
+        w = result.winner()
+        ci, wi = self.create_training_sample(cc, w)
+        return ci, wi
+
+    def run_election(self,
+                     candidates: List[Candidate],
+                     voters: List[Voter]) -> ElectionResult:
+        ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
+        process = self.election_constructor()
+        result = process.run(ballots, set(candidates))
+        return result
+
+    def create_training_sample(self, candidates: List[Candidate], winner: Candidate) -> (list[int], int):
         w = candidates.index(winner)
         cc = [self.convert_ideology_to_bin(c.ideology.vec[0]) for c in candidates]
         return cc, w

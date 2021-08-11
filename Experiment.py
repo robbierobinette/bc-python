@@ -1,6 +1,6 @@
 import math
 import os.path as path
-from typing import List, Tuple
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,16 +8,12 @@ import tensorflow as tf
 from joblib import Parallel, delayed
 
 from ExperimentConfig import ExperimentConfig
-from elections.Ballot import Ballot
 from elections.Candidate import Candidate
-from elections.ElectionResult import ElectionResult
-from elections.DefaultConfigOptions import unit_election_config
+from elections.HeadToHeadElection import HeadToHeadElection
 from elections.Ideology import Ideology
 from elections.Voter import Voter
-from elections.HeadToHeadElection import HeadToHeadElection
 from network.ElectionMemory import ElectionMemory
 from network.ElectionModel import ElectionModel, ElectionModelTrainer
-from network.LossTracker import LossTracker
 
 
 class RaceResult:
@@ -28,6 +24,9 @@ class RaceResult:
         self.utilities = utilities
         self.base_utilities = base_utilities
         self.condorcet_tie = condorcet_tie
+        self.winner_expected_utility = 1 - abs(winner.ideology.distance_from_o())
+        self.winner_idx = candidates.index(winner)
+        self.winner_base = self.base_candidates[self.winner_idx]
 
 class ErrorTracker:
     def __init__(self, decay: float, epsilon: float, min_iterations: int, max_static_iterations: int):
@@ -121,9 +120,11 @@ class Experiment:
     def __init__(self, config: ExperimentConfig):
         self.config = config
         self._model = None
-        self.memory = None
+        self.trainer = None
         self.model_path = f"{self.config.model_path}.mdl"
-        self.error_tracker = ErrorTracker(.0001, 1e-5, 40000, 10000)
+        self.error_tracker = ErrorTracker(.0001, 1e-5, 80000, 10000)
+        self.memory = ElectionMemory(self.config.memory_size * 10, self.config.n_bins)
+        self.training_count = 0
 
     def model(self) -> ElectionModel:
         if self._model:
@@ -133,7 +134,7 @@ class Experiment:
 
     def get_or_train_model(self) -> ElectionModel:
         if path.exists(self.model_path):
-            # print(f"loading {self.model_path}")
+            print(f"loading {self.model_path}")
             self._model = tf.keras.models.load_model(self.model_path, compile=False)
         else:
             self._model = self.train_model()
@@ -143,35 +144,62 @@ class Experiment:
 
     def train_model(self) -> ElectionModel:
         network = ElectionModel(self.config.election_name, self.config.n_bins, self.config.model_width, self.config.model_layers)
-        self.populate_memory(self.config.memory_size)
-        network, loss = self.train_network(network, self.memory, self.config.training_cycles, self.config.batch_size)
+        self.populate_memory_par(self.config.memory_size)
+        network, loss = self.train_network(network, self.config.training_cycles, self.config.batch_size)
         return network
 
-    def populate_memory(self, count: int) -> ElectionMemory:
-        m = ElectionMemory(count * 10, self.config.n_bins)
+    # Must run serial.  Needs to save model to some location and load that for execution
+    # in the remote threads in order to be parallelized.
+    def train_model_iter(self) -> ElectionModel:
+        network = ElectionModel(self.config.election_name, self.config.n_bins, self.config.model_width, self.config.model_layers)
+        self.populate_memory_par(self.config.memory_size)
+        self.trainer = ElectionModelTrainer(network)
+        training_chunk = 1024
+        memory_chunk = 1024
+        while self.training_count < self.config.training_cycles:
+            network, loss = self.train_network(network, training_chunk, self.config.batch_size)
+            self.populate_memory_strategic(memory_chunk)
+        return network
+
+    def populate_memory_strategic(self, count: int):
+        for i in range(count):
+            r = self.run_strategic_race()
+            ci, wi = self.config.create_training_sample(r.candidates, r.winner)
+            self.memory.add_sample(ci, wi)
+
+    def populate_memory_par(self,  count: int):
+        print("populate_memory_par")
+        results: List[list[int], int] = Parallel(n_jobs=32)(delayed(self.config.create_sample_for_memory)() for _ in range(count))
+        for ci, wi in results:
+            self.memory.add_sample(ci, wi)
+        print("populate_memory_par complete:  size %d", self.memory.count)
+
+
+    def populate_memory(self, count: int):
         print(f"populating training memory with {count * 10} samples")
         for i in range(count):
-            cc = self.config.gen_random_candidates(5)
-            voters = self.config.population.generate_unit_voters(self.config.training_voters)
-            result = self.run_election(cc, voters)
-            w = result.winner()
-            ci, wi = self.config.create_training_sample(cc, w)
-            m.add_sample(ci, wi)
-            if i % 1000 == 0:
-                print(f"sample {i}", end='\r')
-        print(f"\nm.count {m.count}")
-        self.memory = m
-        return self.memory
+            ci, wi = self.config.create_sample_for_memory()
+            self.memory.add_sample(ci, wi)
+
+    def compute_random_results_par(self, count: int) -> List[RaceResult]:
+        results: List[RaceResult] = Parallel(n_jobs=32)(delayed(self.run_random_race)() for _ in range(count))
+        return results
+
+    def run_random_race(self) -> RaceResult:
+        candidates = self.config.gen_candidates(5)
+        return self.run_random_race_c(candidates)
+
+    def run_random_race_c(self, candidates: List[Candidate]) -> RaceResult:
+        voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
+        result = self.config.run_election(candidates, voters)
+        winner = result.winner()
+        utilities = self.compute_utilities(winner, candidates, voters)
+        return RaceResult(winner, candidates, candidates, utilities, utilities, result.is_tie)
 
     def compute_random_results(self, count: int) -> List[RaceResult]:
         results: List[RaceResult] = []
         for i in range(count):
-            candidates = self.config.gen_candidates(5)
-            voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
-            result = self.run_election(candidates, voters)
-            winner = result.winner()
-            utilities = self.compute_utilities(winner, candidates, voters)
-            results.append(RaceResult(winner, candidates, candidates, utilities, utilities, result.is_tie))
+            results.append(self.run_random_race())
         return results
 
     @staticmethod
@@ -186,30 +214,22 @@ class Experiment:
 
         return np.array([compute_utility(c) for c in candidates])
 
-    def run_election(self,
-                     candidates: List[Candidate],
-                     voters: List[Voter]) -> ElectionResult:
-        ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
-        process = self.config.election_constructor()
-        result = process.run(ballots, set(candidates))
-        return result
-
-    def train_network(self, net: ElectionModel, memory: ElectionMemory, n_batches: int, batch_size: int):
+    def train_network(self, net: ElectionModel,  n_batches: int, batch_size: int):
         print(f"training network for max of {n_batches} epochs")
         tracker = self.error_tracker
-        trainer = ElectionModelTrainer(net)
         progress_path = f"{self.config.model_path}.progress"
         average_loss = 0
 
-        i = 0
-        while i < n_batches and not tracker.complete():
+        i = self.training_count
+        end = self.training_count + n_batches
+        while i < end and not tracker.complete():
             i += 1
-            x, a, y = memory.get_batch(batch_size)
-            loss = trainer.update(x, a, y)
+            x, a, y = self.memory.get_batch(batch_size)
+            loss = self.trainer.update(x, a, y)
             if np.isnan(loss):
                 print(f"loss is nan, reverting to {progress_path}")
                 net = tf.keras.models.load_model(progress_path)
-                trainer = ElectionModelTrainer(net)
+                self.trainer = ElectionModelTrainer(net)
             else:
                 average_loss = tracker.add_loss(loss)
                 if i % 1000 == 0:
@@ -225,18 +245,21 @@ class Experiment:
             print(f"\tcandidate {c.name}, {c.ideology.vec[0]:.4f}")
 
     def run_strategic_races(self, n: int) -> List[RaceResult]:
-        winners: List[RaceResult] = []
+        results: List[RaceResult] = []
         for i in range(n):
-            winners.append(self.run_strategic_race())
-        return winners
+            results.append(self.run_strategic_race())
+        return results
 
     def run_strategic_races_par(self, n: int) -> List[RaceResult]:
         winners: List[RaceResult] = Parallel(n_jobs=32)(delayed(self.run_strategic_race)() for _ in range(n))
         return winners
 
     def run_strategic_race(self) -> RaceResult:
-        model = self.model()
         candidates = self.config.gen_candidates(5)
+        return self.run_strategic_race_c(candidates)
+
+    def run_strategic_race_c(self, candidates: List[Candidate]) -> RaceResult:
+        model = self.model()
         base_candidates = candidates
         extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
         for bin_range in [3, 2, 1]:
@@ -246,7 +269,7 @@ class Experiment:
 
         voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
         HeadToHeadElection.count_of_ties = 0
-        result = self.run_election(candidates, voters)
+        result = self.config.run_election(candidates, voters)
         w = result.winner()
         strategic_utilities = self.compute_utilities(w, candidates, voters)
         base_utilities = self.compute_utilities(base_candidates[0], base_candidates, voters)
@@ -268,7 +291,7 @@ class Experiment:
         axis.tick_params(axis='y', colors="black")
         axis.set_xlim([-1, 1])
 
-        bins = np.arange(-1, 1, 2 / 21)
+        bins = np.arange(-1, 1, 2 / 30)
         axis.hist(results, bins=bins, label=labels, edgecolor='white', stacked=True)
         axis.legend()
         axis.set_xlabel("Sigma From Origin", fontsize=20)
