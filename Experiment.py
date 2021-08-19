@@ -1,6 +1,7 @@
 import math
 import os.path as path
 from typing import List
+import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,10 +15,12 @@ from elections.Ideology import Ideology
 from elections.Voter import Voter
 from network.ElectionMemory import ElectionMemory
 from network.ElectionModel import ElectionModel, ElectionModelTrainer
+from network.ResultMemory import ResultMemory
 
 
 class RaceResult:
-    def __init__(self, winner: Candidate, candidates: List[Candidate], base_candidates: List[Candidate], utilities: np.array, base_utilities: np.array, condorcet_tie: bool = False):
+    def __init__(self, winner: Candidate, candidates: List[Candidate], base_candidates: List[Candidate],
+                 utilities: np.array, base_utilities: np.array, condorcet_tie: bool = False):
         self.winner = winner
         self.candidates = candidates
         self.base_candidates = base_candidates
@@ -27,6 +30,7 @@ class RaceResult:
         self.winner_expected_utility = 1 - abs(winner.ideology.distance_from_o())
         self.winner_idx = candidates.index(winner)
         self.winner_base = self.base_candidates[self.winner_idx]
+
 
 class ErrorTracker:
     def __init__(self, decay: float, epsilon: float, min_iterations: int, max_static_iterations: int):
@@ -77,9 +81,10 @@ class ExtendedCandidate:
 
     def best_position(self, model: ElectionModel, other_candidates: List[Candidate], bin_range: int) -> float:
         x = self.config.convert_candidates_to_input_vec(other_candidates)
+
+        # logits = model(x)
+        # win_probabilities = tf.nn.softmax(logits)
         win_probabilities = model(x).numpy()
-        # print("win_probabilities")
-        # print(win_probabilities)
 
         # don't change anything of all options have zero return
         best_return = 1e-6
@@ -122,9 +127,10 @@ class Experiment:
         self._model = None
         self.trainer = None
         self.model_path = f"{self.config.model_path}.mdl"
-        self.error_tracker = ErrorTracker(.0001, 1e-5, 80000, 10000)
-        self.memory = ElectionMemory(self.config.memory_size * 10, self.config.n_bins)
+        self.error_tracker = ErrorTracker(.0001, 1e-5, self.config.training_cycles, 20000)
+        self.memory = ResultMemory(self.config.memory_size)
         self.training_count = 0
+        self.memory_path = "memory/%s.results" % config.election_name
 
     def model(self) -> ElectionModel:
         if self._model:
@@ -134,48 +140,48 @@ class Experiment:
 
     def get_or_train_model(self) -> ElectionModel:
         if path.exists(self.model_path):
-            print(f"loading {self.model_path}")
+            print(f"loading model: {self.model_path}")
             self._model = tf.keras.models.load_model(self.model_path, compile=False)
         else:
+            print(f"training model:  {self.model_path}")
             self._model = self.train_model()
             self._model.save(self.model_path)
 
         return self._model
 
     def train_model(self) -> ElectionModel:
-        network = ElectionModel(self.config.election_name, self.config.n_bins, self.config.model_width, self.config.model_layers)
-        self.populate_memory_par(self.config.memory_size)
+        network = ElectionModel(self.config.name, self.config.n_bins, self.config.model_width, self.config.model_layers)
+        self.trainer = ElectionModelTrainer(network, self.config)
+        self.populate_memory()
         network, loss = self.train_network(network, self.config.training_cycles, self.config.batch_size)
-        return network
-
-    # Must run serial.  Needs to save model to some location and load that for execution
-    # in the remote threads in order to be parallelized.
-    def train_model_iter(self) -> ElectionModel:
-        network = ElectionModel(self.config.election_name, self.config.n_bins, self.config.model_width, self.config.model_layers)
-        self.populate_memory_par(self.config.memory_size)
-        self.trainer = ElectionModelTrainer(network)
-        training_chunk = 1024
-        memory_chunk = 1024
-        while self.training_count < self.config.training_cycles:
-            network, loss = self.train_network(network, training_chunk, self.config.batch_size)
-            self.populate_memory_strategic(memory_chunk)
         return network
 
     def populate_memory_strategic(self, count: int):
         for i in range(count):
             r = self.run_strategic_race()
-            ci, wi = self.config.create_training_sample(r.candidates, r.winner)
-            self.memory.add_sample(ci, wi)
+            result_vec = self.config.create_training_sample(r.candidates, r.winner)
+            self.memory.add_sample(result_vec)
 
-    def populate_memory_par(self,  count: int):
-        print("populate_memory_par")
-        results: List[list[int], int] = Parallel(n_jobs=32)(delayed(self.config.create_sample_for_memory)() for _ in range(count))
-        for ci, wi in results:
-            self.memory.add_sample(ci, wi)
-        print("populate_memory_par complete:  size %d", self.memory.count)
+    def populate_memory_par(self, count: int):
+        print("populate_memory_par for %s" % self.model_path)
+        results: List[np.ndarray] = Parallel(n_jobs=32)(
+            delayed(self.config.create_sample_for_memory)() for _ in range(count))
+        for r in results:
+            self.memory.add_sample(r)
+        print("populate_memory_par complete:  size %d" % self.memory.count)
 
+    def populate_memory(self):
+        if path.exists(self.memory_path):
+            with open(self.memory_path, "rb") as f:
+                self.memory = pickle.load(f)
+            print("loaded %d results from %s" % (self.memory.count, self.memory_path))
+        else:
+            self.populate_memory_par(self.config.memory_size)
+            with open(self.memory_path, "wb") as f:
+                pickle.dump(self.memory, f)
+            print("saved %d results to %s" % (self.memory.count, self.memory_path))
 
-    def populate_memory(self, count: int):
+    def populate_memory_serial(self, count: int):
         print(f"populating training memory with {count * 10} samples")
         for i in range(count):
             ci, wi = self.config.create_sample_for_memory()
@@ -214,7 +220,7 @@ class Experiment:
 
         return np.array([compute_utility(c) for c in candidates])
 
-    def train_network(self, net: ElectionModel,  n_batches: int, batch_size: int):
+    def train_network(self, net: ElectionModel, n_batches: int, batch_size: int):
         print(f"training network for max of {n_batches} epochs")
         tracker = self.error_tracker
         progress_path = f"{self.config.model_path}.progress"
@@ -222,18 +228,21 @@ class Experiment:
 
         i = self.training_count
         end = self.training_count + n_batches
+        report = 10
         while i < end and not tracker.complete():
             i += 1
-            x, a, y = self.memory.get_batch(batch_size)
+            x, a, y = self.config.create_batch_from_results(self.memory)
             loss = self.trainer.update(x, a, y)
             if np.isnan(loss):
-                print(f"loss is nan, reverting to {progress_path}")
+                print(f"Loss is NaN, reverting to {progress_path}")
                 net = tf.keras.models.load_model(progress_path)
-                self.trainer = ElectionModelTrainer(net)
+                self.trainer = ElectionModelTrainer(net, self.config)
             else:
                 average_loss = tracker.add_loss(loss)
-                if i % 1000 == 0:
-                    print(f"epoch {i:5d} loss = {average_loss:.6}")
+                if i % report == 0:
+                    if report < 1000:
+                        report = report * 10
+                    print(f"Epoch {i:5d} loss = {average_loss:.6}")
                     net.save(progress_path, overwrite=True)
 
         return net, average_loss
@@ -277,6 +286,8 @@ class Experiment:
 
     @staticmethod
     def plot_results(results: List[List[float]], title: str, labels: List[str]):
+        import matplotlib as mpl
+        mpl.rcParams['figure.dpi'] = 300
         n_rows = 1
         n_cols = 1
         fig, axis = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 10))
@@ -291,7 +302,7 @@ class Experiment:
         axis.tick_params(axis='y', colors="black")
         axis.set_xlim([-1, 1])
 
-        bins = np.arange(-1, 1, 2 / 30)
+        bins = np.arange(-1, 1, 2 / 21)
         axis.hist(results, bins=bins, label=labels, edgecolor='white', stacked=True)
         axis.legend()
         axis.set_xlabel("Sigma From Origin", fontsize=20)

@@ -9,7 +9,7 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v13"
+version = "v17"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
@@ -20,7 +20,7 @@ base_config = ExperimentConfig(name="none",
                                n_bins=21,
                                model_width=768,
                                model_layers=4,
-                               memory_size=200000,
+                               memory_size=400000,
                                batch_size=2048,
                                training_voters=1000,
                                sampling_voters=1000,
@@ -29,22 +29,36 @@ base_config = ExperimentConfig(name="none",
                                equal_pct_bins=True,
                                model_path="none")
 
-irv_config = copy(base_config)
-irv_config.election_name = "IRV"
-irv_config.model_path = f"exp/{version}/IRV"
-irv_config.name = "IRV"
+irv_a_config = copy(base_config)
+irv_a_config.name = "IRV-A"
+irv_a_config.election_name = "IRV"
+irv_a_config.model_path = f"exp/{version}/IRV-A"
+irv_a_config.equal_pct_bins = True
 
-h2h_config = copy(base_config)
-h2h_config.election_name = "H2H"
-h2h_config.model_path = f"exp/{version}/H2H"
-h2h_config.name = "Condorcet-Minimax"
+h2h_a_config = copy(base_config)
+h2h_a_config.name = "H2H-A"
+h2h_a_config.election_name = "H2H"
+h2h_a_config.model_path = f"exp/{version}/H2H-A"
+h2h_a_config.equal_pct_bins = True
 
-pty_config = copy(base_config)
-pty_config.election_name = "Plurality"
-pty_config.model_path = f"exp/{version}/plurality"
-pty_config.name = "Plurality"
 
-base_configs = [h2h_config, irv_config, pty_config]
+irv_b_config = copy(base_config)
+irv_b_config.name = "IRV-B"
+irv_b_config.election_name = "IRV"
+irv_b_config.model_path = f"exp/{version}/IRV-B"
+irv_b_config.equal_pct_bins = False
+
+h2h_b_config = copy(base_config)
+h2h_b_config.name = "H2H-B"
+h2h_b_config.election_name = "H2H"
+h2h_b_config.model_path = f"exp/{version}/H2H-B"
+h2h_b_config.equal_pct_bins = False
+
+
+base_configs = [
+    h2h_a_config, irv_a_config,
+    h2h_b_config, irv_b_config,
+]
 
 
 def touch_model(config: ExperimentConfig):
@@ -53,6 +67,12 @@ def touch_model(config: ExperimentConfig):
 
 
 def build_base_models(configs: List[ExperimentConfig]):
+    for v in configs:
+        exp = Experiment(v)
+        print("populating memory for %s " % exp.memory_path)
+        exp.populate_memory()
+
+    # base_results = [touch_model(c) for c in configs]
     base_results = Parallel(n_jobs=16)(delayed(touch_model)(c) for c in configs)
     return base_results
 
@@ -88,10 +108,11 @@ def run_variant(config: ExperimentConfig) -> ExperimentResult:
 
 
 def build_variants():
-    q_v = build_quality_variants([h2h_config])
+    q_v = build_quality_variants([h2h_a_config])
     f_v = build_flex_variants(base_configs)
     all_variants = q_v + f_v
     print(f"{len(all_variants)} variants to build.")
+
 
     all_results = Parallel(n_jobs=32)(delayed(run_variant)(c) for c in all_variants)
     # all_results = [run_variant(c) for c in all_variants]

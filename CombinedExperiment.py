@@ -91,7 +91,7 @@ class CombinedExperiment:
     def run_experiment(self, exp: Experiment) -> ExperimentResult:
         race_results = exp.run_strategic_races(self.n_races)
         random_results = exp.compute_random_results(self.n_races)
-        name = exp.config.election_name
+        name = exp.config.name
 
         os.system(f"mkdir -p {self.path_base}/plots")
 
