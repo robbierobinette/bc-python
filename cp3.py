@@ -9,12 +9,12 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v17"
+version = "v19"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
                                election_name="none",
-                               training_cycles=100000,
+                               training_cycles=10000,
                                ideology_range=1.5,
                                ideology_flexibility=.7,
                                n_bins=21,
@@ -108,14 +108,13 @@ def run_variant(config: ExperimentConfig) -> ExperimentResult:
 
 
 def build_variants():
-    q_v = build_quality_variants([h2h_a_config])
-    f_v = build_flex_variants(base_configs)
-    all_variants = q_v + f_v
+    # q_v = build_quality_variants([h2h_a_config])
+    # f_v = build_flex_variants(base_configs)
+    all_variants = base_configs
     print(f"{len(all_variants)} variants to build.")
 
-
-    all_results = Parallel(n_jobs=32)(delayed(run_variant)(c) for c in all_variants)
-    # all_results = [run_variant(c) for c in all_variants]
+    # all_results = Parallel(n_jobs=32)(delayed(run_variant)(c) for c in all_variants)
+    all_results = [run_variant(c) for c in all_variants]
 
     import os
     os.system(f"mkdir -p exp/{version}")
@@ -128,5 +127,5 @@ def build_variants():
 
 
 base_results = build_base_models(base_configs)
-print(f"base_results: {base_results}")
-build_variants()
+# print(f"base_results: {base_results}")
+# build_variants()

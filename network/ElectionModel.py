@@ -18,7 +18,7 @@ class ElectionModel(tf.keras.Model):
 
         self.dropout = tf.keras.layers.Dropout(.3)
         self.output_layer = tf.keras.layers.Dense(n_bins, name="action_logits")
-        # self.softmax = tf.keras.layers.Softmax()
+        self.softmax = tf.keras.layers.Softmax()
 
     def call(self, input_data: Tensor, training: bool = None, mask: Tensor = None) -> Tensor:
         tip = input_data
@@ -28,7 +28,10 @@ class ElectionModel(tf.keras.Model):
         logits = self.output_layer(tip)
         # cap the logits
         logits = 20 * tf.tanh(logits / 20)
-        return logits
+        probabilities = self.softmax(logits)
+
+        epsilon = 1e-5
+        return tf.clip_by_value(probabilities, epsilon, 1 - epsilon)
 
 class ElectionModelTrainer:
     def __init__(self, model: ElectionModel, config: ExperimentConfig):
@@ -49,10 +52,7 @@ class ElectionModelTrainer:
 
     def update(self, input_data: Tensor, actions: Tensor, winners: Tensor):
         with tf.GradientTape() as tape:
-            logits = self.model(input_data)       # shape is (batch_size, n_bins)
-            probabilities = tf.nn.softmax(logits)
-            epsilon = 1e-4
-            probabilities = tf.clip_by_value(probabilities, epsilon, 1 - epsilon)
+            probabilities = self.model(input_data)       # shape is (batch_size, n_bins)
             loss = self.cross_entropy(winners, probabilities, actions)
             loss = tf.reduce_mean(loss)
 

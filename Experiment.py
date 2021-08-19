@@ -81,9 +81,6 @@ class ExtendedCandidate:
 
     def best_position(self, model: ElectionModel, other_candidates: List[Candidate], bin_range: int) -> float:
         x = self.config.convert_candidates_to_input_vec(other_candidates)
-
-        # logits = model(x)
-        # win_probabilities = tf.nn.softmax(logits)
         win_probabilities = model(x).numpy()
 
         # don't change anything of all options have zero return
@@ -127,7 +124,12 @@ class Experiment:
         self._model = None
         self.trainer = None
         self.model_path = f"{self.config.model_path}.mdl"
-        self.error_tracker = ErrorTracker(.0001, 1e-5, self.config.training_cycles, 20000)
+
+        self.error_tracker = ErrorTracker(decay=1e-3,
+                                          epsilon=1e-5,
+                                          min_iterations=self.config.training_cycles,
+                                          max_static_iterations=20000)
+
         self.memory = ResultMemory(self.config.memory_size)
         self.training_count = 0
         self.memory_path = "memory/%s.results" % config.election_name
@@ -233,17 +235,14 @@ class Experiment:
             i += 1
             x, a, y = self.config.create_batch_from_results(self.memory)
             loss = self.trainer.update(x, a, y)
-            if np.isnan(loss):
-                print(f"Loss is NaN, reverting to {progress_path}")
-                net = tf.keras.models.load_model(progress_path)
-                self.trainer = ElectionModelTrainer(net, self.config)
-            else:
-                average_loss = tracker.add_loss(loss)
-                if i % report == 0:
-                    if report < 1000:
-                        report = report * 10
-                    print(f"Epoch {i:5d} loss = {average_loss:.6}")
-                    net.save(progress_path, overwrite=True)
+            assert(not np.isnan(loss), "loss is nan")
+
+            average_loss = tracker.add_loss(loss)
+            if i % report == 0:
+                if report < 1000:
+                    report = report * 10
+                print(f"Epoch {i:5d} loss = {average_loss:.6}")
+                net.save(progress_path, overwrite=True)
 
         return net, average_loss
 
