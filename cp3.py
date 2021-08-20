@@ -9,7 +9,7 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v22"
+version = "v23"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
@@ -80,6 +80,7 @@ base_configs = [
 
 
 def touch_model(config: ExperimentConfig):
+    config.build_model = True
     x = Experiment(config).model()
     return True
 

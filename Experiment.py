@@ -117,6 +117,7 @@ class ExtendedCandidate:
 
         return self.current_candidate
 
+
 class MemoryWrapper:
     def __init__(self, config: ExperimentConfig):
         self.config = config
@@ -128,7 +129,6 @@ class MemoryWrapper:
             self.r_memory = ResultMemory(config.memory_size)
         else:
             self.e_memory = ElectionMemory(config.memory_size, config.n_bins)
-
 
     def save(self):
         if self.result_memory:
@@ -181,10 +181,10 @@ class Experiment:
         self.trainer = None
         self.model_path = f"{self.config.model_path}.mdl"
 
-        self.error_tracker = ErrorTracker(decay=1e-3,
-                                          epsilon=1e-5,
-                                          min_iterations=self.config.training_cycles,
-                                          max_static_iterations=20000)
+        self.loss_tracker = ErrorTracker(decay=1e-3,
+                                         epsilon=1e-5,
+                                         min_iterations=self.config.training_cycles,
+                                         max_static_iterations=20000)
 
         self.memory = MemoryWrapper(self.config)
         self.training_count = 0
@@ -204,7 +204,7 @@ class Experiment:
             self._model = self.train_model()
             self._model.save(self.model_path)
         else:
-            raise Exception("Model not prebuilt and config.build_model is False." )
+            raise Exception("Model not prebuilt and config.build_model is False.")
 
         return self._model
 
@@ -271,11 +271,11 @@ class Experiment:
 
     def train_network(self, net: ElectionModel, n_batches: int, batch_size: int):
         print(f"training network for max of {n_batches} epochs")
-        tracker = self.error_tracker
-        progress_path = f"{self.config.model_path}.progress"
+        tracker = self.loss_tracker
+        i = self.training_count
+        progress_path = "%s.%06d.progress" % (self.model_path, self.training_count)
         average_loss = 0
 
-        i = self.training_count
         end = self.training_count + n_batches
         report = 10
         while i < end and not tracker.complete():
@@ -284,7 +284,7 @@ class Experiment:
             x, a, y = self.memory.get_batch()
             loss = self.trainer.update(x, a, y)
             if np.isnan(loss):
-             raise Exception("loss is nan")
+                raise Exception("loss is nan")
 
             average_loss = tracker.add_loss(loss)
             if i % report == 0:
@@ -292,7 +292,9 @@ class Experiment:
                     report = report * 10
                 # print(f"Epoch {i:5d} loss = {average_loss:.6}")
                 print("%s Epoch %5d loss = %.6f" % (self.config.name, i, average_loss))
+                progress_path = "%s.%06d.progress" % (self.model_path, self.training_count)
                 net.save(progress_path, overwrite=True)
+                net.save(self.model_path, overwrite=True)
 
         return net, average_loss
 
@@ -354,7 +356,7 @@ class Experiment:
         bins = np.arange(-1, 1, 2 / 21)
         axis.hist(results, bins=bins, label=labels, edgecolor='white', stacked=True)
         axis.legend()
-        axis.set_xlabel("Sigma From Origin", fontsize=20)
+        axis.set_xlabel("Sigma From Median Voter", fontsize=20)
         axis.set_ylabel("Frequency of Winner at Ideology", fontsize=20)
 
         plt.savefig("foo.png")
