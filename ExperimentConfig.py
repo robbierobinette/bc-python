@@ -34,7 +34,8 @@ class ExperimentConfig:
                  quality_variance: float = 0,
                  candidate_variance: float = 1.0,
                  equal_pct_bins: bool = False,
-                 model_path: str = "none"):
+                 model_path: str = "none",
+                 build_model: bool = False):
 
         self.name = name
         self.election_name = election_name
@@ -57,6 +58,7 @@ class ExperimentConfig:
         self.candidate_variance = candidate_variance
         self.equal_pct_bins = equal_pct_bins
         self.model_path = model_path
+        self.build_model = build_model
 
         self.pct_min = cumulative_normal_dist(self.min_ideology)
         self.pct_max = cumulative_normal_dist(self.max_ideology)
@@ -133,7 +135,9 @@ class ExperimentConfig:
 
         batch_size = self.batch_size // 10
         results = memory.get_batch(batch_size)
+        return self.convert_results_to_batch(results)
 
+    def convert_results_to_batch(self, results: np.ndarray):
         if results.ndim == 1:
             results = np.expand_dims(results, 0)
 
@@ -176,9 +180,13 @@ class ExperimentConfig:
         return int(bin)
 
     def convert_ideology_to_bin_sigma(self, ideology: float) -> int:
-        ideology = max(self.min_ideology, min(ideology, self.max_ideology))
+        ideology = np.clip(ideology, self.min_ideology, self.max_ideology)
         pct = (ideology - self.min_ideology) / (self.ideology_range * 2)
         return int(pct * self.n_bins)
+
+    def convert_ideology_to_bin_sigma2(self, ideology: float) -> int:
+        ideology = np.clip(ideology, self.min_ideology, self.max_ideology)
+        return int((ideology - self.min_ideology) // self.sigma_step)
 
     def convert_bin_to_ideology_sigma(self, bin: int) -> float:
         ideology = self.min_ideology + self.sigma_step * bin + random.uniform(0, self.sigma_step)
@@ -206,11 +214,6 @@ class ExperimentConfig:
         cc = [winner] + list(cs)
         i = [c.ideology.vec for c in cc]
         return np.hstack(i)
-
-    def create_training_batch(self, results: np.ndarray):
-        w = candidates.index(winner)
-        cc = [self.convert_ideology_to_bin(c.ideology.vec[0]) for c in candidates]
-        return cc, w
 
     @staticmethod
     def create_population() -> NDPopulation:

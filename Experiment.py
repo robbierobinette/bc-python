@@ -144,10 +144,13 @@ class Experiment:
         if path.exists(self.model_path):
             print(f"loading model: {self.model_path}")
             self._model = tf.keras.models.load_model(self.model_path, compile=False)
-        else:
+        elif self.config.build_model:
             print(f"training model:  {self.model_path}")
             self._model = self.train_model()
             self._model.save(self.model_path)
+        else:
+            raise Exception("Model not prebuilt and config.build_model is False." )
+
 
         return self._model
 
@@ -235,7 +238,8 @@ class Experiment:
             i += 1
             x, a, y = self.config.create_batch_from_results(self.memory)
             loss = self.trainer.update(x, a, y)
-            assert(not np.isnan(loss), "loss is nan")
+            if np.isnan(loss):
+             raise Exception("loss is nan")
 
             average_loss = tracker.add_loss(loss)
             if i % report == 0:

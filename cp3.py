@@ -9,12 +9,12 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v19"
+version = "v20"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
                                election_name="none",
-                               training_cycles=10000,
+                               training_cycles=30000,
                                ideology_range=1.5,
                                ideology_flexibility=.7,
                                n_bins=21,
