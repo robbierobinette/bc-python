@@ -17,6 +17,9 @@ class ResultMemory:
         self.data[sr:er] = sample
 
     def get_batch(self, batch_size) -> np.ndarray:
-        indices = np.random.randint(0, min(self.max_size, self.count), batch_size)
+        if batch_size > self.count:
+            indices = np.arange(0, self.count)
+        else:
+            indices = np.random.randint(0, min(self.max_size, self.count), batch_size)
         return tf.gather(self.data, indices)
 

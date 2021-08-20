@@ -45,5 +45,8 @@ class ElectionMemory:
         self.y[sr:er] = y
 
     def get_batch(self, batch_size) -> (np.ndarray, np.ndarray, np.ndarray):
-        indices = np.random.randint(0, min(self.max_size, self.count), batch_size)
+        if batch_size > self.count:
+            indices = np.arange(0, self.count)
+        else:
+            indices = np.random.randint(0, min(self.max_size, self.count), batch_size)
         return tf.gather(self.x, indices), tf.gather(self.mask, indices), tf.gather(self.y, indices)

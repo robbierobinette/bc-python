@@ -28,6 +28,7 @@ class ExperimentConfig:
                  model_width: int = 512,
                  model_layers: int = 3,
                  memory_size: int = 20000,
+                 result_memory: bool = True,
                  batch_size: int = 2048,
                  training_voters: int = 1000,
                  sampling_voters: int = 1000,
@@ -50,6 +51,7 @@ class ExperimentConfig:
         self.model_width = model_width
         self.model_layers = model_layers
         self.memory_size = memory_size
+        self.result_memory = result_memory
         self.batch_size = batch_size
         self.training_voters = training_voters
         self.sampling_voters = sampling_voters
@@ -132,8 +134,7 @@ class ExperimentConfig:
             return self.convert_ideology_to_bin_sigma(ideology)
 
     def create_batch_from_results(self, memory: ResultMemory) -> ( np.ndarray, np.ndarray, np.ndarray):
-
-        batch_size = self.batch_size // 10
+        batch_size = int(self.batch_size / 2)
         results = memory.get_batch(batch_size)
         return self.convert_results_to_batch(results)
 
@@ -143,7 +144,7 @@ class ExperimentConfig:
 
         in_rows = results.shape[0]
         cols = results.shape[1]
-        out_rows = in_rows * 10
+        out_rows = in_rows * 2
 
         bin_it = lambda x: self.convert_ideology_to_bin(x)
         v_bin = np.vectorize(bin_it)
@@ -155,20 +156,20 @@ class ExperimentConfig:
 
         out_row = 0
         for in_row in range(in_rows):
-            for i in range(cols):
-                for j in range(cols):
-                    if i != j:
-                        x[out_row, results[in_row, j]] = 1
+            i = np.random.randint(0, cols)
+            for j in range(cols):
+                if i != j:
+                    x[out_row, results[in_row, j]] = 1
 
-                if i == 0:
-                    y[out_row, results[in_row, i]] = 1
-                mask[out_row, results[in_row, i]] = 1
-                out_row += 1
+            if i == 0:
+                y[out_row, results[in_row, i]] = 1
+            mask[out_row, results[in_row, i]] = 1
+            out_row += 1
 
         x[out_row: out_rows] = np.flip(x[0: out_row], axis=1)
         y[out_row: out_rows] = np.flip(y[0: out_row], axis=1)
         mask[out_row: out_rows] = np.flip(mask[0: out_row], axis=1)
-        return x, y, mask
+        return x, mask, y
 
     def convert_bin_to_ideology_pct(self, bin: int) -> float:
         pct = self.pct_min + bin * self.pct_step + random.uniform(0, self.pct_step)

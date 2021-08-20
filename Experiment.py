@@ -117,6 +117,62 @@ class ExtendedCandidate:
 
         return self.current_candidate
 
+class MemoryWrapper:
+    def __init__(self, config: ExperimentConfig):
+        self.config = config
+        self.result_memory = config.result_memory
+        self.e_memory_path = "memory/%s-%s.election_memory" % (self.config.election_name, self.config.equal_pct_bins)
+        self.r_memory_path = "memory/%s.result_memory" % self.config.election_name
+        self.count = 0
+        if self.result_memory:
+            self.r_memory = ResultMemory(config.memory_size)
+        else:
+            self.e_memory = ElectionMemory(config.memory_size, config.n_bins)
+
+
+    def save(self):
+        if self.result_memory:
+            with open(self.r_memory_path, "wb") as f:
+                pickle.dump(self.r_memory, f)
+            print("saved %d results to %s" % (self.count, self.r_memory_path))
+        else:
+            with open(self.e_memory_path, "wb") as f:
+                pickle.dump(self.e_memory, f)
+            print("saved %d results to %s" % (self.count, self.e_memory_path))
+
+    def load(self) -> bool:
+        if self.result_memory:
+            if path.exists(self.r_memory_path):
+                with open(self.r_memory_path, "rb") as f:
+                    self.r_memory = pickle.load(f)
+                self.count = self.r_memory.count
+                return True
+            else:
+                return False
+        else:
+            if path.exists(self.e_memory_path):
+                with open(self.e_memory_path, "rb") as f:
+                    self.e_memory = pickle.load(f)
+                self.count = self.e_memory.count
+                return True
+            else:
+                return False
+
+    def add_sample(self, result: np.ndarray):
+        if self.result_memory:
+            self.r_memory.add_sample(result)
+            self.count = self.r_memory.count
+        else:
+            cc = [self.config.convert_ideology_to_bin(i) for i in result]
+            self.e_memory.add_sample(cc, 0)
+            self.count = self.e_memory.count
+
+    def get_batch(self) -> (np.ndarray, np.ndarray, np.ndarray):
+        if self.result_memory:
+            return self.config.create_batch_from_results(self.r_memory)
+        else:
+            return self.e_memory.get_batch(self.config.batch_size)
+
 
 class Experiment:
     def __init__(self, config: ExperimentConfig):
@@ -130,9 +186,8 @@ class Experiment:
                                           min_iterations=self.config.training_cycles,
                                           max_static_iterations=20000)
 
-        self.memory = ResultMemory(self.config.memory_size)
+        self.memory = MemoryWrapper(self.config)
         self.training_count = 0
-        self.memory_path = "memory/%s.results" % config.election_name
 
     def model(self) -> ElectionModel:
         if self._model:
@@ -151,7 +206,6 @@ class Experiment:
         else:
             raise Exception("Model not prebuilt and config.build_model is False." )
 
-
         return self._model
 
     def train_model(self) -> ElectionModel:
@@ -161,14 +215,8 @@ class Experiment:
         network, loss = self.train_network(network, self.config.training_cycles, self.config.batch_size)
         return network
 
-    def populate_memory_strategic(self, count: int):
-        for i in range(count):
-            r = self.run_strategic_race()
-            result_vec = self.config.create_training_sample(r.candidates, r.winner)
-            self.memory.add_sample(result_vec)
-
     def populate_memory_par(self, count: int):
-        print("populate_memory_par for %s" % self.model_path)
+        print("populate_memory_par for %s" % self.config.name)
         results: List[np.ndarray] = Parallel(n_jobs=32)(
             delayed(self.config.create_sample_for_memory)() for _ in range(count))
         for r in results:
@@ -176,15 +224,11 @@ class Experiment:
         print("populate_memory_par complete:  size %d" % self.memory.count)
 
     def populate_memory(self):
-        if path.exists(self.memory_path):
-            with open(self.memory_path, "rb") as f:
-                self.memory = pickle.load(f)
-            print("loaded %d results from %s" % (self.memory.count, self.memory_path))
+        if self.memory.load():
+            print("loaded %d results from memory" % self.memory.count)
         else:
             self.populate_memory_par(self.config.memory_size)
-            with open(self.memory_path, "wb") as f:
-                pickle.dump(self.memory, f)
-            print("saved %d results to %s" % (self.memory.count, self.memory_path))
+            self.memory.save()
 
     def populate_memory_serial(self, count: int):
         print(f"populating training memory with {count * 10} samples")
@@ -236,7 +280,8 @@ class Experiment:
         report = 10
         while i < end and not tracker.complete():
             i += 1
-            x, a, y = self.config.create_batch_from_results(self.memory)
+            # x, a, y = self.config.create_batch_from_results(self.memory)
+            x, a, y = self.memory.get_batch()
             loss = self.trainer.update(x, a, y)
             if np.isnan(loss):
              raise Exception("loss is nan")
@@ -245,7 +290,8 @@ class Experiment:
             if i % report == 0:
                 if report < 1000:
                     report = report * 10
-                print(f"Epoch {i:5d} loss = {average_loss:.6}")
+                # print(f"Epoch {i:5d} loss = {average_loss:.6}")
+                print("%s Epoch %5d loss = %.6f" % (self.config.name, i, average_loss))
                 net.save(progress_path, overwrite=True)
 
         return net, average_loss

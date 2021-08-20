@@ -9,18 +9,19 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v20"
+version = "v22"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
                                election_name="none",
-                               training_cycles=30000,
+                               training_cycles=50000,
                                ideology_range=1.5,
                                ideology_flexibility=.7,
                                n_bins=21,
                                model_width=768,
                                model_layers=4,
-                               memory_size=400000,
+                               memory_size=200000,
+                               result_memory=True,
                                batch_size=2048,
                                training_voters=1000,
                                sampling_voters=1000,
@@ -28,6 +29,24 @@ base_config = ExperimentConfig(name="none",
                                candidate_variance=0.5,
                                equal_pct_bins=True,
                                model_path="none")
+
+# irv_x_config = copy(base_config)
+# irv_x_config.name = "IRV-X"
+# irv_x_config.election_name = "IRV"
+# irv_x_config.model_path = f"exp/{version}/IRV-X"
+# irv_x_config.equal_pct_bins = True
+# irv_x_config.result_memory = True
+# irv_x_config.build_model = True
+#
+# irv_y_config = copy(base_config)
+# irv_y_config.name = "IRV-Y"
+# irv_y_config.election_name = "IRV"
+# irv_y_config.model_path = f"exp/{version}/IRV-Y"
+# irv_y_config.equal_pct_bins = True
+# irv_y_config.result_memory = False
+# irv_y_config.build_model = True
+# base_configs = [irv_x_config, irv_y_config]
+
 
 irv_a_config = copy(base_config)
 irv_a_config.name = "IRV-A"
@@ -54,7 +73,6 @@ h2h_b_config.election_name = "H2H"
 h2h_b_config.model_path = f"exp/{version}/H2H-B"
 h2h_b_config.equal_pct_bins = False
 
-
 base_configs = [
     h2h_a_config, irv_a_config,
     h2h_b_config, irv_b_config,
@@ -69,7 +87,7 @@ def touch_model(config: ExperimentConfig):
 def build_base_models(configs: List[ExperimentConfig]):
     for v in configs:
         exp = Experiment(v)
-        print("populating memory for %s " % exp.memory_path)
+        print("populating memory for %s " % exp.config.name)
         exp.populate_memory()
 
     # base_results = [touch_model(c) for c in configs]
@@ -88,7 +106,6 @@ def build_quality_variants(base_configs: List[ExperimentConfig]) -> List[Experim
             nc.name = "%s-qv-%04.02f" % (c.name, qv)
             cc.append(nc)
     return cc
-
 
 def build_flex_variants(base_configs: List[ExperimentConfig]) -> List[ExperimentConfig]:
     cc: List[ExperimentConfig] = []
