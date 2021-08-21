@@ -9,7 +9,7 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v23"
+version = "v26"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
@@ -25,7 +25,7 @@ base_config = ExperimentConfig(name="none",
                                batch_size=2048,
                                training_voters=1000,
                                sampling_voters=1000,
-                               quality_variance=0,
+                               quality_variance=.1,
                                candidate_variance=0.5,
                                equal_pct_bins=True,
                                model_path="none")
@@ -51,26 +51,26 @@ base_config = ExperimentConfig(name="none",
 irv_a_config = copy(base_config)
 irv_a_config.name = "IRV-A"
 irv_a_config.election_name = "IRV"
-irv_a_config.model_path = f"exp/{version}/IRV-A"
+irv_a_config.model_path = f"exp/{version}/IRV-A.mdl"
 irv_a_config.equal_pct_bins = True
 
 h2h_a_config = copy(base_config)
 h2h_a_config.name = "H2H-A"
 h2h_a_config.election_name = "H2H"
-h2h_a_config.model_path = f"exp/{version}/H2H-A"
+h2h_a_config.model_path = f"exp/{version}/H2H-A.mdl"
 h2h_a_config.equal_pct_bins = True
 
 
 irv_b_config = copy(base_config)
 irv_b_config.name = "IRV-B"
 irv_b_config.election_name = "IRV"
-irv_b_config.model_path = f"exp/{version}/IRV-B"
+irv_b_config.model_path = f"exp/{version}/IRV-B.mdl"
 irv_b_config.equal_pct_bins = False
 
 h2h_b_config = copy(base_config)
 h2h_b_config.name = "H2H-B"
 h2h_b_config.election_name = "H2H"
-h2h_b_config.model_path = f"exp/{version}/H2H-B"
+h2h_b_config.model_path = f"exp/{version}/H2H-B.mdl"
 h2h_b_config.equal_pct_bins = False
 
 base_configs = [

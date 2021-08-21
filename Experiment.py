@@ -122,8 +122,8 @@ class MemoryWrapper:
     def __init__(self, config: ExperimentConfig):
         self.config = config
         self.result_memory = config.result_memory
-        self.e_memory_path = "memory/%s-%s.election_memory" % (self.config.election_name, self.config.equal_pct_bins)
-        self.r_memory_path = "memory/%s.result_memory" % self.config.election_name
+        self.e_memory_path = "memory/%s-%s-%.2f.election_memory" % (self.config.election_name, self.config.equal_pct_bins, self.config.quality_variance)
+        self.r_memory_path = "memory/%s-%.2f.result_memory" % (self.config.election_name, self.config.quality_variance)
         self.count = 0
         if self.result_memory:
             self.r_memory = ResultMemory(config.memory_size)
@@ -179,7 +179,7 @@ class Experiment:
         self.config = config
         self._model = None
         self.trainer = None
-        self.model_path = f"{self.config.model_path}.mdl"
+        self.model_path = self.config.model_path
 
         self.loss_tracker = ErrorTracker(decay=1e-3,
                                          epsilon=1e-5,
@@ -204,7 +204,7 @@ class Experiment:
             self._model = self.train_model()
             self._model.save(self.model_path)
         else:
-            raise Exception("Model not prebuilt and config.build_model is False.")
+            raise Exception("Model (%s) not prebuilt and config.build_model is False." % self.model_path)
 
         return self._model
 
@@ -273,9 +273,7 @@ class Experiment:
         print(f"training network for max of {n_batches} epochs")
         tracker = self.loss_tracker
         i = self.training_count
-        progress_path = "%s.%06d.progress" % (self.model_path, self.training_count)
         average_loss = 0
-
         end = self.training_count + n_batches
         report = 10
         while i < end and not tracker.complete():
@@ -292,7 +290,7 @@ class Experiment:
                     report = report * 10
                 # print(f"Epoch {i:5d} loss = {average_loss:.6}")
                 print("%s Epoch %5d loss = %.6f" % (self.config.name, i, average_loss))
-                progress_path = "%s.%06d.progress" % (self.model_path, self.training_count)
+                progress_path = "%s.%06d.progress" % (self.model_path, i)
                 net.save(progress_path, overwrite=True)
                 net.save(self.model_path, overwrite=True)
 
