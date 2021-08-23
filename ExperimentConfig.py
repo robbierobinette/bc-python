@@ -61,6 +61,7 @@ class ExperimentConfig:
         self.equal_pct_bins = equal_pct_bins
         self.model_path = model_path
         self.build_model = build_model
+        self.election_config = unit_election_config
 
         self.pct_min = cumulative_normal_dist(self.min_ideology)
         self.pct_max = cumulative_normal_dist(self.max_ideology)
@@ -118,6 +119,13 @@ class ExperimentConfig:
                 candidates.append(Candidate(f"c-{len(candidates)}", Independents, Ideology(ivec), quality))
 
         return candidates
+
+    def convert_bin_to_ideology_base(self, bin: int) -> float:
+        if self.equal_pct_bins:
+            bin_start_pct = self.pct_min + bin * self.pct_step
+            return rank_to_sigma(bin_start_pct)
+        else:
+            return self.min_ideology + self.sigma_step * bin
 
 
     def convert_bin_to_ideology(self, bin: int) -> float:
@@ -195,7 +203,7 @@ class ExperimentConfig:
 
     def create_sample_for_memory(self) -> np.ndarray:
         import os
-        cc = self.gen_random_candidates(5)
+        cc = self.gen_candidates(5)
         voters = self.population.generate_unit_voters(self.training_voters)
         result = self.run_election(cc, voters)
         w = result.winner()
@@ -204,7 +212,7 @@ class ExperimentConfig:
     def run_election(self,
                      candidates: List[Candidate],
                      voters: List[Voter]) -> ElectionResult:
-        ballots = [Ballot(v, candidates, unit_election_config) for v in voters]
+        ballots = [Ballot(v, candidates, self.election_config) for v in voters]
         process = self.election_constructor()
         result = process.run(ballots, set(candidates))
         return result

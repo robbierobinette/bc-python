@@ -60,9 +60,10 @@ class CombinedExperiment:
     def run(self) -> List[ExperimentResult]:
         return [self.run_experiment(exp) for exp in self.experiments]
 
-    def estimate_utility(self, sigma: float) -> float:
+    @staticmethod
+    def estimate_utility(sigma: float) -> float:
         import random as r
-        count = 1000
+        count = 100000
         sum = 0.0
         for i in range(count):
             x = r.normalvariate(0, 1)
@@ -86,6 +87,22 @@ class CombinedExperiment:
         average_utility = np.average([np.average(r.base_utilities) for r in strategic_results])
         max_utility = np.average([np.max(r.base_utilities) for r in strategic_results])
         winning_utility = np.average([r.utilities[0] for r in strategic_results])
+        return (winning_utility - average_utility) / (max_utility - average_utility)
+
+    @staticmethod
+    def compute_SUE_single(r: RaceResult) -> float:
+        average_utility = np.average(r.base_utilities)
+        max_utility = np.max(r.base_utilities)
+        winning_utility = r.utilities[0]
+        return (winning_utility - average_utility) / (max_utility - average_utility)
+
+    @staticmethod
+    def compute_SUE_single_e(r: RaceResult) -> float:
+        base_utilities = [CombinedExperiment.estimate_utility(c.ideology.vec[0]) for c in r.base_candidates]
+        average_utility = np.average(base_utilities)
+        max_utility = np.max(base_utilities)
+        winning_utility = CombinedExperiment.estimate_utility(r.winner.ideology.vec[0])
+
         return (winning_utility - average_utility) / (max_utility - average_utility)
 
     def run_experiment(self, exp: Experiment) -> ExperimentResult:

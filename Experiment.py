@@ -84,17 +84,18 @@ class ExtendedCandidate:
         win_probabilities = model(x).numpy()
 
         # don't change anything of all options have zero return
-        best_return = 1e-6
         best_ideology = self.current_candidate.ideology.vec[0]
+        best_return = self.win_bonus(best_ideology) * win_probabilities[0, self.current_bin]
 
         b_start = max(0, self.current_bin - bin_range)
         b_end = min(self.config.n_bins, self.current_bin + bin_range + 1)
         for b in range(b_start, b_end):
             ideology = self.config.convert_bin_to_ideology(b)
+            bin_start = self.config.convert_bin_to_ideology_base(b)
             wb = self.win_bonus(ideology)
             expected_return = wb * win_probabilities[0, b]
-            # print(f"bin {b:2d} ideology {ideology: .4f} win_probability {win_probabilities[0, b]:.4f} " +
-            #       f"win_bonus {wb:.4f} expected_return {expected_return:.4f}", end='')
+            # print(f"%s: bin %2d bin_start: % 5.2f ideology % 6.2f  win_probability %5.3f win_bonus %5.3f return %5.3f" %
+            #       (self.base_candidate.name, b, bin_start, ideology, win_probabilities[0, b], wb, expected_return), end = '')
             if expected_return > best_return:
                 # print(" best!", end='')
                 best_return = expected_return
@@ -230,12 +231,6 @@ class Experiment:
             self.populate_memory_par(self.config.memory_size)
             self.memory.save()
 
-    def populate_memory_serial(self, count: int):
-        print(f"populating training memory with {count * 10} samples")
-        for i in range(count):
-            ci, wi = self.config.create_sample_for_memory()
-            self.memory.add_sample(ci, wi)
-
     def compute_random_results_par(self, count: int) -> List[RaceResult]:
         results: List[RaceResult] = Parallel(n_jobs=32)(delayed(self.run_random_race)() for _ in range(count))
         return results
@@ -300,7 +295,7 @@ class Experiment:
     def log_candidates(msg: str, cc: List[Candidate]):
         print(msg)
         for c in cc:
-            print(f"\tcandidate {c.name}, {c.ideology.vec[0]:.4f}")
+            print(f"\tcandidate %s % 6.2f" % (c.name, c.ideology.vec[0]))
 
     def run_strategic_races(self, n: int) -> List[RaceResult]:
         results: List[RaceResult] = []
@@ -314,18 +309,19 @@ class Experiment:
 
     def run_strategic_race(self) -> RaceResult:
         candidates = self.config.gen_candidates(5)
-        return self.run_strategic_race_c(candidates)
+        voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
+        return self.run_strategic_race_c(candidates, voters)
 
-    def run_strategic_race_c(self, candidates: List[Candidate]) -> RaceResult:
+    def run_strategic_race_c(self, candidates: List[Candidate], voters: List[Voter]) -> RaceResult:
         model = self.model()
         base_candidates = candidates
+        # self.log_candidates(f"starting candidates {self.config.election_name}", candidates)
         extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
         for bin_range in [3, 2, 1]:
             cc = [ec.current_candidate for ec in extended_candidates]
             candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
             # self.log_candidates(f"after adjust {bin_range}", candidates)
 
-        voters = self.config.population.generate_unit_voters(self.config.sampling_voters)
         HeadToHeadElection.count_of_ties = 0
         result = self.config.run_election(candidates, voters)
         w = result.winner()
