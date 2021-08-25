@@ -198,7 +198,6 @@ class Experiment:
 
     def get_or_train_model(self) -> ElectionModel:
         if path.exists(self.model_path):
-            print(f"loading model: {self.model_path}")
             self._model = tf.keras.models.load_model(self.model_path, compile=False)
         elif self.config.build_model:
             print(f"training model:  {self.model_path}")
@@ -210,7 +209,7 @@ class Experiment:
         return self._model
 
     def train_model(self) -> ElectionModel:
-        network = ElectionModel(self.config.name, self.config.n_bins, self.config.model_width, self.config.model_layers)
+        network = ElectionModel(self.config.name, self.config.n_bins, self.config.model_width, self.config.model_layers, self.config.sigmoid)
         self.trainer = ElectionModelTrainer(network, self.config)
         self.populate_memory()
         network, loss = self.train_network(network, self.config.training_cycles, self.config.batch_size)

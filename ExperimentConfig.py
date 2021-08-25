@@ -28,6 +28,7 @@ class ExperimentConfig:
                  model_width: int = 512,
                  model_layers: int = 3,
                  memory_size: int = 20000,
+                 sigmoid: bool = False,
                  result_memory: bool = True,
                  batch_size: int = 2048,
                  training_voters: int = 1000,
@@ -50,6 +51,7 @@ class ExperimentConfig:
         self.sigma_step = (self.max_ideology - self.min_ideology) / self.n_bins
         self.model_width = model_width
         self.model_layers = model_layers
+        self.sigmoid = sigmoid
         self.memory_size = memory_size
         self.result_memory = result_memory
         self.batch_size = batch_size

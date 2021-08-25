@@ -5,12 +5,13 @@ from ExperimentConfig import ExperimentConfig
 
 
 class ElectionModel(tf.keras.Model):
-    def __init__(self, model_name: str, n_bins: int, width: int, n_layers: int):
+    def __init__(self, model_name: str, n_bins: int, width: int, n_layers: int, sigmoid: bool = False):
         super(ElectionModel, self).__init__()
         self.model_name = model_name
         self.n_bins = n_bins
         self.width = width
         self.n_layers = n_layers
+        self.sigmoid = sigmoid
 
         self.my_layers = []
         for i in range(n_layers):
@@ -28,7 +29,10 @@ class ElectionModel(tf.keras.Model):
         logits = self.output_layer(tip)
         # cap the logits
         logits = 20 * tf.tanh(logits / 20)
-        probabilities = self.softmax(logits)
+        if self.sigmoid:
+            probabilities = tf.nn.sigmoid(logits)
+        else:
+            probabilities = self.softmax(logits)
 
         epsilon = 1e-5
         return tf.clip_by_value(probabilities, epsilon, 1 - epsilon)

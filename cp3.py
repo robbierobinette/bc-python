@@ -9,23 +9,24 @@ from CombinedExperiment import ExperimentResult
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 
-version = "v27"
+version = "v29"
 snap(version)
 n_races = 1000
 base_config = ExperimentConfig(name="none",
                                election_name="none",
-                               training_cycles=50000,
+                               training_cycles=200000,
                                ideology_range=1.5,
                                ideology_flexibility=.7,
                                n_bins=21,
                                model_width=768,
                                model_layers=4,
+                               sigmoid = False,
                                memory_size=200000,
                                result_memory=True,
                                batch_size=2048,
                                training_voters=1000,
                                sampling_voters=1000,
-                               quality_variance=.1,
+                               quality_variance=0.0,
                                candidate_variance=0.5,
                                equal_pct_bins=True,
                                model_path="none")
@@ -53,12 +54,14 @@ irv_a_config.name = "IRV-A"
 irv_a_config.election_name = "IRV"
 irv_a_config.model_path = f"exp/{version}/IRV-A.mdl"
 irv_a_config.equal_pct_bins = True
+irv_a_config.sigmoid = True
 
 h2h_a_config = copy(base_config)
 h2h_a_config.name = "H2H-A"
 h2h_a_config.election_name = "H2H"
 h2h_a_config.model_path = f"exp/{version}/H2H-A.mdl"
 h2h_a_config.equal_pct_bins = True
+h2h_a_config.sigmoid = True
 
 
 # irv_b_config = copy(base_config)
