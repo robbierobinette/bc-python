@@ -66,11 +66,12 @@ class ErrorTracker:
 
 
 class ExtendedCandidate:
-    def __init__(self, base_candidate: Candidate, config: ExperimentConfig):
+    def __init__(self, base_candidate: Candidate, config: ExperimentConfig, debug: bool):
         self.config = config
         self.base_candidate = base_candidate
         self.current_bin = self.config.convert_ideology_to_bin(base_candidate.ideology.vec[0])
         self.current_candidate = base_candidate
+        self.debug = debug
 
     def win_bonus(self, ideology: float) -> float:
         delta = math.fabs(ideology - self.base_candidate.ideology.vec[0])
@@ -94,13 +95,16 @@ class ExtendedCandidate:
             bin_start = self.config.convert_bin_to_ideology_base(b)
             wb = self.win_bonus(ideology)
             expected_return = wb * win_probabilities[0, b]
-            # print(f"%s: bin %2d bin_start: % 5.2f ideology % 6.2f  win_probability %5.3f win_bonus %5.3f return %5.3f" %
-            #       (self.base_candidate.name, b, bin_start, ideology, win_probabilities[0, b], wb, expected_return), end = '')
+            if self.debug:
+                print(f"%s: bin %2d bin_start: % 5.2f ideology % 6.2f  win_probability %5.3f win_bonus %5.3f return %5.3f" %
+                      (self.base_candidate.name, b, bin_start, ideology, win_probabilities[0, b], wb, expected_return), end = '')
             if expected_return > best_return:
-                # print(" best!", end='')
+                if self.debug:
+                    print(" best!", end='')
                 best_return = expected_return
                 best_ideology = ideology
-            # print('')
+            if self.debug:
+                print('')
 
         return best_ideology
 
@@ -180,6 +184,7 @@ class Experiment:
         self.config = config
         self._model = None
         self.trainer = None
+        self.debug = False
         self.model_path = self.config.model_path
 
         self.loss_tracker = ErrorTracker(decay=1e-3,
@@ -314,12 +319,14 @@ class Experiment:
     def run_strategic_race_c(self, candidates: List[Candidate], voters: List[Voter]) -> RaceResult:
         model = self.model()
         base_candidates = candidates
-        # self.log_candidates(f"starting candidates {self.config.election_name}", candidates)
-        extended_candidates = [ExtendedCandidate(c, self.config) for c in candidates]
+        if self.debug:
+            self.log_candidates(f"starting candidates {self.config.election_name}", candidates)
+        extended_candidates = [ExtendedCandidate(c, self.config, self.debug) for c in candidates]
         for bin_range in [3, 2, 1]:
             cc = [ec.current_candidate for ec in extended_candidates]
             candidates = [e.best_candidate(model, cc, bin_range) for e in extended_candidates]
-            # self.log_candidates(f"after adjust {bin_range}", candidates)
+            if self.debug:
+                self.log_candidates(f"after adjust {bin_range}", candidates)
 
         HeadToHeadElection.count_of_ties = 0
         result = self.config.run_election(candidates, voters)

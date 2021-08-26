@@ -19,7 +19,8 @@ class ElectionModel(tf.keras.Model):
 
         self.dropout = tf.keras.layers.Dropout(.3)
         self.output_layer = tf.keras.layers.Dense(n_bins, name="action_logits")
-        self.softmax = tf.keras.layers.Softmax()
+        if not self.sigmoid:
+            self.softmax = tf.keras.layers.Softmax()
 
     def call(self, input_data: Tensor, training: bool = None, mask: Tensor = None) -> Tensor:
         tip = input_data

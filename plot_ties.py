@@ -1,4 +1,5 @@
 import os
+from util.Constructor import Constructor
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "5"
 from copy import copy
@@ -18,7 +19,7 @@ class ComparisonResult:
         self.results = results
 
 
-version="v6"
+version="v29"
 
 base_config = ExperimentConfig("base_config",
                                "IRV",
@@ -94,45 +95,26 @@ def count_ties(rr: List[RaceResult]) -> float:
     ties = [r for r in rr if r.condorcet_tie]
     return len(ties) / len(rr)
 
-from os import path
-import pickle
-
-class Constructor:
-    def __init__(self, f, path: str):
-        self.f = f
-        self.path = path
-    def construct(self):
-        if path.exists(self.path):
-            print(f"path: {self.path} exists")
-            with open(self.path, "rb") as f:
-                return pickle.load(f)
-        else:
-            print(f"path: {self.path} does not exist")
-            result = self.f()
-            print(f"saving to {self.path}")
-            with open(self.path, "wb") as f:
-                pickle.dump(result, f)
-            return result
 
 
 def main():
-    # flex_range = np.arange(0, 1.01, .1)
+    flex_range = np.arange(0, 1.01, .1)
     qv_range = np.arange(0, .03, .02)
 
-    # flex_results_f = lambda: [run_races(0, fx) for fx in flex_range]
+    flex_results_f = lambda: [run_races(0, fx) for fx in flex_range]
     qv_results_f = lambda: [run_races(qv, .7) for qv in qv_range]
 
-    # flex_results = Constructor(flex_results_f, f"exp/{version}/flex_results.p").construct()
+    flex_results = Constructor(flex_results_f, f"exp/{version}/flex_results.p").construct()
     qv_results = Constructor(qv_results_f, f"exp/{version}/qv_results.p").construct()
 
-    # flex_ties = [count_ties(rr) for rr in flex_results]
+    flex_ties = [count_ties(rr) for rr in flex_results]
     qv_ties = [count_ties(rr) for rr in qv_results]
 
-    # make_line_plot([[flex_range, flex_ties]],
-    #                "Frequency of Condorcet-Ties vs. Candidate Flexibility with Strategy",
-    #                ["Chance of Tie"],
-    #                "Candidate Ideological Flexibility (stddev)",
-    #                "Percentage of Ties")
+    make_line_plot([[flex_range, flex_ties]],
+                   "Frequency of Condorcet-Ties vs. Candidate Flexibility with Strategy",
+                   ["Chance of Tie"],
+                   "Candidate Ideological Flexibility (stddev)",
+                   "Percentage of Ties")
 
     make_line_plot([[qv_range, qv_ties]],
                    "Frequency of Condorcet-Ties vs. Candidate Quality Variance",
